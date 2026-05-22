@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import "./style.css"
 import File from "./File.jsx"
+import Join from "./Join.jsx"
 import Media from "./Media.jsx"
 import Notepad from "./Notepad.jsx"
 import Photos from "./Photos.jsx"
@@ -103,7 +104,13 @@ export default function App() {
   }
 
   if (!auth?.account) {
-    return <LoginScreen onAuthenticated={startSession} />
+    return (
+      <Join
+        onAuthenticated={startSession}
+        onLogin={authenticateAccount}
+        onSignup={createAccount}
+      />
+    )
   }
 
   return (
@@ -112,80 +119,6 @@ export default function App() {
       account={auth.account}
       onSignOut={endSession}
     />
-  )
-}
-
-function LoginScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState("login")
-  const [displayName, setDisplayName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [message, setMessage] = useState("")
-  const [busy, setBusy] = useState(false)
-
-  async function submitAuth(e) {
-    e.preventDefault()
-    setMessage("")
-    setBusy(true)
-
-    try {
-      const account =
-        mode === "signup"
-          ? await createAccount({ displayName, email, password })
-          : await authenticateAccount({ email, password })
-
-      onAuthenticated(account)
-    } catch (error) {
-      setMessage(error.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <main className="login-screen">
-      <div className="login-panel">
-        <div className="login-avatar">{getInitials(displayName || email || "User")}</div>
-        <form className="login-form" onSubmit={submitAuth}>
-          {mode === "signup" && (
-            <input
-              value={displayName}
-              autoComplete="name"
-              placeholder="Name"
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-          )}
-          <input
-            value={email}
-            autoComplete="email"
-            placeholder="Email"
-            type="email"
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            value={password}
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            placeholder="Password"
-            type="password"
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button type="submit" disabled={busy}>
-            {busy ? "Please wait" : mode === "signup" ? "Sign up" : "Sign in"}
-          </button>
-        </form>
-        {message && <p className="login-message">{message}</p>}
-        <button
-          className="login-mode"
-          type="button"
-          onClick={() => {
-            setMode((current) => (current === "login" ? "signup" : "login"))
-            setMessage("")
-          }}
-        >
-          {mode === "login" ? "Create account" : "Use existing account"}
-        </button>
-      </div>
-    </main>
   )
 }
 
@@ -1485,9 +1418,25 @@ async function postJson(url, body) {
 }
 
 async function parseApiResponse(response) {
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message ?? "Something went wrong.")
+  const text = await response.text()
+  const data = text ? tryParseJson(text) : {}
+
+  if (!response.ok) {
+    throw new Error(
+      data.message ??
+        `Request failed (${response.status}). Check that Netlify Functions are deployed.`,
+    )
+  }
+
   return data
+}
+
+function tryParseJson(text) {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return {}
+  }
 }
 
 function persistServerState(session) {

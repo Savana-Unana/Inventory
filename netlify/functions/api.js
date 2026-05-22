@@ -6,10 +6,10 @@ const sessionCookie = "inventory_session"
 const dbKey = "db"
 
 export async function handler(event) {
-  const db = await readDb()
-  const route = getRoute(event)
-
   try {
+    const db = await readDb()
+    const route = getRoute(event)
+
     if (event.httpMethod === "GET" && route === "/session") {
       return handleSession(event, db)
     }
@@ -30,9 +30,16 @@ export async function handler(event) {
       return handleState(event, db)
     }
 
-    return json({ message: "Not found." }, 404)
+    return json({ message: `API route not found: ${route}` }, 404)
   } catch (error) {
-    return json({ message: error.message ?? "Server error." }, 500)
+    return json(
+      {
+        message: error.message
+          ? `Server error: ${error.message}`
+          : "Server error.",
+      },
+      500,
+    )
   }
 }
 
@@ -137,7 +144,7 @@ async function handleState(event, db) {
 }
 
 async function readDb() {
-  const store = getStore("inventory-data")
+  const store = getStore({ name: "inventory-data", consistency: "strong" })
   const db = await store.get(dbKey, { type: "json" })
 
   return {
@@ -149,7 +156,7 @@ async function readDb() {
 
 async function writeDb(db) {
   db.sessions = db.sessions.filter((session) => session.expiresAt > Date.now())
-  const store = getStore("inventory-data")
+  const store = getStore({ name: "inventory-data", consistency: "strong" })
   await store.setJSON(dbKey, db)
 }
 
