@@ -4,6 +4,7 @@ import crypto from "node:crypto"
 const sessionDurationMs = 10 * 60 * 1000
 const sessionCookie = "inventory_session"
 const dbKey = "db"
+const blobStoreName = "inventory-data"
 
 export async function handler(event) {
   try {
@@ -144,7 +145,7 @@ async function handleState(event, db) {
 }
 
 async function readDb() {
-  const store = getStore({ name: "inventory-data", consistency: "strong" })
+  const store = getBlobStore()
   const db = await store.get(dbKey, { type: "json" })
 
   return {
@@ -156,8 +157,24 @@ async function readDb() {
 
 async function writeDb(db) {
   db.sessions = db.sessions.filter((session) => session.expiresAt > Date.now())
-  const store = getStore({ name: "inventory-data", consistency: "strong" })
+  const store = getBlobStore()
   await store.setJSON(dbKey, db)
+}
+
+function getBlobStore() {
+  const siteID = process.env.NETLIFY_SITE_ID ?? process.env.SITE_ID
+  const token = process.env.NETLIFY_BLOBS_TOKEN ?? process.env.NETLIFY_AUTH_TOKEN
+
+  if (siteID && token) {
+    return getStore({
+      name: blobStoreName,
+      siteID,
+      token,
+      consistency: "strong",
+    })
+  }
+
+  return getStore({ name: blobStoreName, consistency: "strong" })
 }
 
 function getRoute(event) {
