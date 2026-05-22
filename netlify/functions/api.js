@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs"
+import { connectLambda, getStore } from "@netlify/blobs"
 import crypto from "node:crypto"
 
 const sessionDurationMs = 10 * 60 * 1000
@@ -8,6 +8,8 @@ const blobStoreName = "inventory-data"
 
 export async function handler(event) {
   try {
+    connectLambda(event)
+
     const db = await readDb()
     const route = getRoute(event)
 
@@ -166,14 +168,15 @@ function getBlobStore() {
   const token = process.env.NETLIFY_BLOBS_TOKEN ?? process.env.NETLIFY_AUTH_TOKEN
 
   if (siteID && token) {
-    return getStore(blobStoreName, {
+    return getStore({
+      name: blobStoreName,
       siteID,
       token,
       consistency: "strong",
     })
   }
 
-  return getStore(blobStoreName, { consistency: "strong" })
+  return getStore({ name: blobStoreName, consistency: "strong" })
 }
 
 function getRoute(event) {
