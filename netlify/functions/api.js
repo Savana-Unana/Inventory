@@ -166,15 +166,14 @@ function getBlobStore() {
   const token = process.env.NETLIFY_BLOBS_TOKEN ?? process.env.NETLIFY_AUTH_TOKEN
 
   if (siteID && token) {
-    return getStore({
-      name: blobStoreName,
+    return getStore(blobStoreName, {
       siteID,
       token,
       consistency: "strong",
     })
   }
 
-  return getStore({ name: blobStoreName, consistency: "strong" })
+  return getStore(blobStoreName, { consistency: "strong" })
 }
 
 function getRoute(event) {
