@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import "./style.css"
+import Chrome from "./Chrome.jsx"
 import File from "./File.jsx"
 import Join from "./Join.jsx"
 import Media from "./Media.jsx"
@@ -11,6 +12,7 @@ import Settings from "./Settings.jsx"
 import noteIcon from "./assets/logos/Notepad.png"
 import setIcon from "./assets/logos/Settings.png"
 import fileIcon from "./assets/logos/FileExplorer.png"
+import chromeIcon from "./assets/logos/GoogleChrome.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
@@ -61,6 +63,11 @@ const desktopApps = [
     type: "file-explorer",
     title: "File Explorer",
     logo: fileIcon,
+  },
+  {
+    type: "google-chrome",
+    title: "Google Chrome",
+    logo: chromeIcon,
   }
 ]
 
@@ -504,6 +511,7 @@ function Desktop({ account, onSignOut }) {
                 mediaType={win.data.mediaType}
               />
             )}
+            {win.type === "google-chrome" && <Chrome />}
           </Window>
         )
       ))}
@@ -888,6 +896,11 @@ function WindowPreview({ win }) {
         )}
         {win.type === "settings" && (
           <div className="preview-settings"></div>
+        )}
+        {win.type === "google-chrome" && (
+          <div className="preview-chrome">
+            savana-unana.github.io/UPRO/animatrix
+          </div>
         )}
       </div>
     </div>
@@ -1422,9 +1435,13 @@ async function parseApiResponse(response) {
   const data = text ? tryParseJson(text) : {}
 
   if (!response.ok) {
+    const fallback = text
+      ? `Request failed (${response.status}): ${text.slice(0, 180)}`
+      : `Request failed (${response.status}). Check that Netlify Functions are deployed.`
+
     throw new Error(
       data.message ??
-        `Request failed (${response.status}). Check that Netlify Functions are deployed.`,
+        fallback,
     )
   }
 

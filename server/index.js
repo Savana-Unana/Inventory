@@ -19,6 +19,10 @@ const app = express()
 app.use(express.json({ limit: "50mb" }))
 app.use(cookieParser())
 
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, storage: dbPath })
+})
+
 app.get("/api/session", async (req, res) => {
   const db = await readDb()
   const session = getValidSession(db, req.cookies[sessionCookie])
@@ -117,6 +121,17 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(distDir, "index.html"))
 })
 
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    next(error)
+    return
+  }
+
+  res.status(500).json({
+    message: error.message ? `Server error: ${error.message}` : "Server error.",
+  })
+})
+
 app.listen(port, () => {
   console.log(`Inventory server running at http://localhost:${port}`)
 })
@@ -130,8 +145,23 @@ async function readDb() {
       userData: db.userData ?? {},
     }
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      await backupCorruptDb()
+      return { accounts: [], sessions: [], userData: {} }
+    }
+
     if (error.code !== "ENOENT") throw error
     return { accounts: [], sessions: [], userData: {} }
+  }
+}
+
+async function backupCorruptDb() {
+  const corruptPath = path.join(dataDir, `inventory-db-corrupt-${Date.now()}.json`)
+
+  try {
+    await fs.rename(dbPath, corruptPath)
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
   }
 }
 
