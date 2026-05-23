@@ -172,11 +172,10 @@ function getBlobStore() {
       name: blobStoreName,
       siteID,
       token,
-      consistency: "strong",
     })
   }
 
-  return getStore({ name: blobStoreName, consistency: "strong" })
+  return getStore(blobStoreName)
 }
 
 function getRoute(event) {
