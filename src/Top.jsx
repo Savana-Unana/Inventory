@@ -13,6 +13,9 @@ import noteIcon from "./assets/logos/Notepad.png"
 import setIcon from "./assets/logos/Settings.png"
 import fileIcon from "./assets/logos/FileExplorer.png"
 import chromeIcon from "./assets/logos/GoogleChrome.png"
+import folderIcon from "./assets/logos/Folder.png"
+import mediaIcon from "./assets/logos/MediaPlayer.png"
+import photosIcon from "./assets/logos/Photos.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
@@ -20,19 +23,22 @@ const ROOT_FOLDER_ID = "user"
 const DESKTOP_FOLDER_ID = "desktop"
 const RECYCLE_BIN_FOLDER_ID = "recycle-bin"
 const REMOVED_DEFAULT_FOLDER_IDS = ["documents", "pictures", "videos"]
-const DEFAULT_FILE_FOLDERS = [
+const BASE_DEFAULT_FILE_FOLDERS = [
   { id: ROOT_FOLDER_ID, name: "User Folder", parentId: null },
   { id: DESKTOP_FOLDER_ID, name: "Desktop", parentId: ROOT_FOLDER_ID },
   { id: "downloads", name: "Downloads", parentId: ROOT_FOLDER_ID },
   { id: RECYCLE_BIN_FOLDER_ID, name: "Recycling Bin", parentId: ROOT_FOLDER_ID },
 ]
 
-const backgrounds = Object.values( // grabs all bg images
-  import.meta.glob("./assets/backgrounds/*.{png,jpg,jpeg}", {
-    eager: true,
-    import: "default",
-  }),
-)
+const backgroundAssets = import.meta.glob("./assets/backgrounds/*.{png,jpg,jpeg}", {
+  eager: true,
+  import: "default",
+})
+const backgrounds = Object.entries(backgroundAssets).map(([path, url]) => ({
+  id: path,
+  name: cleanAssetName(path),
+  url,
+}))
 const logoAssets = import.meta.glob("./assets/logos/*.{png,jpg,jpeg}", {
   eager: true,
   import: "default",
@@ -68,7 +74,7 @@ const desktopApps = [
     type: "google-chrome",
     title: "Google Chrome",
     logo: chromeIcon,
-  }
+  },
 ]
 
 export default function App() {
@@ -133,14 +139,19 @@ export default function App() {
 function Desktop({ account, onSignOut }) {
   const fileStoreKey = getAccountStorageKey(account.id, FILE_STORE_KEY)
   const fileStoreChangeEvent = `file-store-change:${account.id}`
+  const rootFolderName = account.displayName || "User Folder"
   const savedDesktopState = loadDesktopState(account.id)
   const [windows, setWindows] = useState([]) //stores open windows
   const [lastFrames, setLastFrames] = useState(
     () => savedDesktopState.lastFrames ?? {},
   ) //stores last sizing
-  const [fileStore, setFileStore] = useState(() => loadFileStore(fileStoreKey))
+  const [fileStore, setFileStore] = useState(() =>
+    loadFileStore(fileStoreKey, rootFolderName),
+  )
   const [saveDialog, setSaveDialog] = useState(null)
+  const [openDialog, setOpenDialog] = useState(null)
   const [desktopContextMenu, setDesktopContextMenu] = useState(null)
+  const [closeRequests, setCloseRequests] = useState({})
   const [pinnedApps, setPinnedApps] = useState(() => //stores pinned icons
     savedDesktopState.pinnedApps ?? desktopApps.map((app) => app.type),
   )
@@ -148,25 +159,32 @@ function Desktop({ account, onSignOut }) {
     savedDesktopState.taskbarOrder ?? desktopApps.map((app) => app.type),
   )
   const [taskbarPositions, setTaskbarPositions] = useState({}) //stores icon positions
-  const [background] = useState(
-    () => savedDesktopState.background ?? pickRandom(backgrounds),
+  const [volume, setVolume] = useState(() =>
+    clamp(savedDesktopState.volume ?? 1, 0, 1),
+  )
+  const [homeFolderId, setHomeFolderId] = useState(
+    () => savedDesktopState.homeFolderId ?? DESKTOP_FOLDER_ID,
+  )
+  const [background, setBackground] = useState(
+    () => savedDesktopState.background ?? pickRandom(backgrounds).url,
   ) //selects one backgrounds
   const [desktopItems, setDesktopItems] = useState(() => //puts all apps seperately on desktop
     placeDesktopApps(
-      getDesktopApps(loadFileStore(fileStoreKey)),
+      getDesktopItems(loadFileStore(fileStoreKey, rootFolderName)),
       savedDesktopState.desktopItems ?? [],
     ),
   )
   const [selectedIcons, setSelectedIcons] = useState([]) //store selected icons
+  const lastSessionTouch = useRef(0)
 
   useEffect(() => {
     function reloadStore() {
-      setFileStore(loadFileStore(fileStoreKey))
+      setFileStore(loadFileStore(fileStoreKey, rootFolderName))
     }
 
     window.addEventListener(fileStoreChangeEvent, reloadStore)
     return () => window.removeEventListener(fileStoreChangeEvent, reloadStore)
-  }, [fileStoreChangeEvent, fileStoreKey])
+  }, [fileStoreChangeEvent, fileStoreKey, rootFolderName])
 
   useEffect(() => {
     saveDesktopState(account.id, {
@@ -175,8 +193,10 @@ function Desktop({ account, onSignOut }) {
       lastFrames,
       pinnedApps,
       taskbarOrder,
+      volume,
+      homeFolderId,
     })
-  }, [account.id, background, desktopItems, lastFrames, pinnedApps, taskbarOrder])
+  }, [account.id, background, desktopItems, homeFolderId, lastFrames, pinnedApps, taskbarOrder, volume])
 
   useEffect(() => {
     syncAccountState(account.id, {
@@ -186,22 +206,68 @@ function Desktop({ account, onSignOut }) {
         lastFrames,
         pinnedApps,
         taskbarOrder,
+        volume,
+        homeFolderId,
       },
       fileStore,
     })
-  }, [account.id, background, desktopItems, fileStore, lastFrames, pinnedApps, taskbarOrder])
+  }, [account.id, background, desktopItems, fileStore, homeFolderId, lastFrames, pinnedApps, taskbarOrder, volume])
+
+  useEffect(() => {
+    function resizeMaximizedWindows() {
+      const maximizedFrame = getMaximizedFrame()
+
+      setWindows((wins) =>
+        wins.map((win) =>
+          win.maximized
+            ? {
+                ...win,
+                ...maximizedFrame,
+              }
+            : win,
+        ),
+      )
+    }
+
+    window.addEventListener("resize", resizeMaximizedWindows)
+    window.visualViewport?.addEventListener("resize", resizeMaximizedWindows)
+
+    return () => {
+      window.removeEventListener("resize", resizeMaximizedWindows)
+      window.visualViewport?.removeEventListener("resize", resizeMaximizedWindows)
+    }
+  }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDesktopItems((items) => {
-      const nextApps = getDesktopApps(fileStore)
+      const nextApps = getDesktopItems(fileStore)
       return placeDesktopApps(nextApps, items)
     })
   }, [fileStore])
 
+  useEffect(() => {
+    function touchSession() {
+      const now = Date.now()
+      if (now - lastSessionTouch.current < 60 * 1000) return
+
+      lastSessionTouch.current = now
+      refreshAccountSession()
+    }
+
+    window.addEventListener("pointerdown", touchSession)
+    window.addEventListener("keydown", touchSession)
+
+    return () => {
+      window.removeEventListener("pointerdown", touchSession)
+      window.removeEventListener("keydown", touchSession)
+    }
+  }, [])
+
   function openWindow(app) {
     const windowType = app.windowType ?? app.type
     const frame = lastFrames[windowType] ?? getFirstWindowFrame()
+    const maximizedFrame = getMaximizedFrame()
 
     //Creates a new window with all the prior info given
     setWindows((wins) => [
@@ -210,27 +276,93 @@ function Desktop({ account, onSignOut }) {
         id: crypto.randomUUID(),
         type: windowType,
         title: app.title,
-        ...frame,
+        ...maximizedFrame,
         zIndex: Math.max(0, ...wins.map((win) => win.zIndex)) + 1,
         minimized: false,
-        maximized: false,
-        restoreFrame: null,
+        maximized: true,
+        restoreFrame: frame,
         data: { ...getStartingWindowData(app.type), ...(app.data ?? {}) },
       },
     ])
   }
 
+  function openDesktopItem(item) {
+    if (item.desktopKind === "file") {
+      const file = fileStore.files.find((entry) => entry.id === item.fileId)
+      if (file) openFile(file)
+      return
+    }
+
+    openWindow(item)
+  }
+
+  async function dropDesktopFiles(e) {
+    e.preventDefault()
+    const files = [...e.dataTransfer.files]
+    const droppedImages = getDroppedUrls(e.dataTransfer)
+      .filter(isImageUrl)
+      .map((url) => makeUrlFile(url, DESKTOP_FOLDER_ID))
+
+    if (!files.length && !droppedImages.length) return
+
+    const existingNames = fileStore.files
+      .filter((file) => file.folderId === DESKTOP_FOLDER_ID)
+      .map((file) => file.name)
+
+    const nextFiles = await Promise.all(
+      files.map(async (file) => {
+        const name = getUniqueFileName(file.name, existingNames)
+        existingNames.push(name)
+
+        return {
+          id: crypto.randomUUID(),
+          name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          folderId: DESKTOP_FOLDER_ID,
+          addedAt: Date.now(),
+          text: file.type.startsWith("text/") ? await file.text() : "",
+          dataUrl: await readStoredFileData(file),
+        }
+      }),
+    )
+    const uniqueDroppedImages = droppedImages.map((file) => {
+      const name = getUniqueFileName(file.name, existingNames)
+      existingNames.push(name)
+      return { ...file, name }
+    })
+
+    const nextStore = {
+      ...fileStore,
+      files: [...nextFiles, ...uniqueDroppedImages, ...fileStore.files],
+    }
+
+    try {
+      localStorage.setItem(fileStoreKey, JSON.stringify(nextStore))
+    } catch {
+      playSound(alert, volume)
+      return
+    }
+
+    setFileStore(nextStore)
+    window.dispatchEvent(new Event(fileStoreChangeEvent))
+  }
+
   function openFile(file) {
     if (file.type.startsWith("image/")) {
+      if (focusOpenFileWindow(file, "photos")) return
+
       openWindow({
         type: "photos",
         title: file.name,
-        data: { name: file.name, dataUrl: file.dataUrl },
+        data: { fileId: file.id, name: file.name, dataUrl: file.dataUrl },
       })
       return
     }
 
     if (file.type.startsWith("text/")) {
+      if (focusOpenFileWindow(file, "notepad")) return
+
       openWindow({
         type: "notepad",
         title: file.name,
@@ -240,12 +372,32 @@ function Desktop({ account, onSignOut }) {
     }
 
     if (isMediaFile(file)) {
+      if (focusOpenFileWindow(file, "media-player")) return
+
       openWindow({
         type: "media-player",
         title: file.name,
-        data: { name: file.name, dataUrl: file.dataUrl, mediaType: file.type },
+        data: {
+          fileId: file.id,
+          name: file.name,
+          dataUrl: file.dataUrl,
+          mediaType: file.type,
+        },
       })
     }
+  }
+
+  function focusOpenFileWindow(file, type) {
+    const existing = windows.find((win) =>
+      win.type === type &&
+      (win.data.fileId === file.id ||
+        (!win.data.fileId && win.title === file.name && win.data.dataUrl === file.dataUrl)),
+    )
+
+    if (!existing) return false
+
+    focusWindow(existing.id)
+    return true
   }
 
   function closeWindow(id) {
@@ -261,6 +413,13 @@ function Desktop({ account, onSignOut }) {
 
       return wins.filter((win) => win.id !== id)
     })
+  }
+
+  function requestAnimatedClose(id) {
+    setCloseRequests((requests) => ({
+      ...requests,
+      [id]: (requests[id] ?? 0) + 1,
+    }))
   }
 
   function updateWindowFrame(id, frame) {
@@ -342,8 +501,98 @@ function Desktop({ account, onSignOut }) {
     })
   }
 
+  function deleteDesktopItem(item) {
+    if (item.desktopKind === "file") {
+      const nextStore = {
+        ...fileStore,
+        files: fileStore.files.map((file) =>
+          file.id === item.fileId
+            ? {
+                ...file,
+                folderId: RECYCLE_BIN_FOLDER_ID,
+                originalFolderId: file.folderId,
+                deletedAt: Date.now(),
+              }
+            : file,
+        ),
+      }
+
+      localStorage.setItem(fileStoreKey, JSON.stringify(nextStore))
+      setFileStore(nextStore)
+      window.dispatchEvent(new Event(fileStoreChangeEvent))
+    }
+
+    if (item.desktopKind === "folder") {
+      const nextStore = {
+        ...fileStore,
+        folders: fileStore.folders.map((folder) =>
+          folder.id === item.folderId
+            ? {
+                ...folder,
+                parentId: RECYCLE_BIN_FOLDER_ID,
+                originalParentId: folder.parentId,
+                deletedAt: Date.now(),
+              }
+            : folder,
+        ),
+      }
+
+      localStorage.setItem(fileStoreKey, JSON.stringify(nextStore))
+      setFileStore(nextStore)
+      window.dispatchEvent(new Event(fileStoreChangeEvent))
+    }
+
+    setDesktopContextMenu(null)
+  }
+
+  function deleteDesktopItems(types) {
+    const selected = desktopItems.filter((item) => types.includes(item.type))
+    const deletable = selected.filter((item) =>
+      item.desktopKind === "file" || item.desktopKind === "folder",
+    )
+
+    if (!deletable.length) return
+
+    const fileIds = deletable
+      .filter((item) => item.desktopKind === "file")
+      .map((item) => item.fileId)
+    const folderIds = deletable
+      .filter((item) => item.desktopKind === "folder")
+      .map((item) => item.folderId)
+    const nextStore = {
+      ...fileStore,
+      files: fileStore.files.map((file) =>
+        fileIds.includes(file.id)
+          ? {
+              ...file,
+              folderId: RECYCLE_BIN_FOLDER_ID,
+              originalFolderId: file.folderId,
+              deletedAt: Date.now(),
+            }
+          : file,
+      ),
+      folders: fileStore.folders.map((folder) =>
+        folderIds.includes(folder.id)
+          ? {
+              ...folder,
+              parentId: RECYCLE_BIN_FOLDER_ID,
+              originalParentId: folder.parentId,
+              deletedAt: Date.now(),
+            }
+          : folder,
+      ),
+    }
+
+    localStorage.setItem(fileStoreKey, JSON.stringify(nextStore))
+    setFileStore(nextStore)
+    setSelectedIcons((current) =>
+      current.filter((type) => !deletable.some((item) => item.type === type)),
+    )
+    window.dispatchEvent(new Event(fileStoreChangeEvent))
+  }
+
   function emptyRecycleBin() {
-    const store = loadFileStore(fileStoreKey)
+    const store = loadFileStore(fileStoreKey, rootFolderName)
     const recycleFolderIds = getRecycleFolderTreeIds(store.folders)
     const nextStore = {
       ...store,
@@ -360,7 +609,7 @@ function Desktop({ account, onSignOut }) {
     localStorage.setItem(fileStoreKey, JSON.stringify(nextStore))
     setFileStore(nextStore)
     window.dispatchEvent(new Event(fileStoreChangeEvent))
-    playSound(recycledSound)
+    playSound(recycledSound, volume)
     setDesktopContextMenu(null)
   }
 
@@ -380,7 +629,12 @@ function Desktop({ account, onSignOut }) {
       windowId: id,
       name: win.title.endsWith(".txt") ? win.title.slice(0, -4) : win.title,
       folderId: win.data.folderId ?? DESKTOP_FOLDER_ID,
+      targetFileId: win.data.fileId ?? "",
     })
+  }
+
+  function openNotepadFileDialog(id) {
+    setOpenDialog({ windowId: id })
   }
 
   function finishNotepadSave() {
@@ -393,9 +647,11 @@ function Desktop({ account, onSignOut }) {
       win.data.text ?? "",
       saveDialog.folderId,
       fileStoreKey,
+      rootFolderName,
+      saveDialog.targetFileId,
     )
     window.dispatchEvent(new Event(fileStoreChangeEvent))
-    setFileStore(loadFileStore(fileStoreKey))
+    setFileStore(loadFileStore(fileStoreKey, rootFolderName))
 
     setWindows((wins) =>
       wins.map((item) =>
@@ -416,8 +672,31 @@ function Desktop({ account, onSignOut }) {
     setSaveDialog(null)
   }
 
+  function finishNotepadOpen(fileId) {
+    const file = fileStore.files.find((item) => item.id === fileId)
+    if (!file || !openDialog) return
+
+    setWindows((wins) =>
+      wins.map((item) =>
+        item.id === openDialog.windowId
+          ? {
+              ...item,
+              title: file.name,
+              data: {
+                ...item.data,
+                fileId: file.id,
+                folderId: file.folderId,
+                text: file.text ?? "",
+              },
+            }
+          : item,
+      ),
+    )
+    setOpenDialog(null)
+  }
+
   function pokeSaveDialog() {
-    playSound(alert)
+    playSound(alert, volume)
   }
 
   function focusWindow(id) {
@@ -460,14 +739,21 @@ function Desktop({ account, onSignOut }) {
       className="desktop"
       style={{ backgroundImage: `url(${background})` }}
       onClick={() => setDesktopContextMenu(null)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={dropDesktopFiles}
+      onKeyDown={(e) => {
+        if (e.key === "Delete") deleteDesktopItems(selectedIcons)
+      }}
+      tabIndex={0}
     >
       <DesktopGrid
         apps={desktopItems}
         selectedIcons={selectedIcons}
         onSelect={setSelectedIcons}
         onPlaceSelected={placeDesktopItems}
-        onOpen={openWindow}
+        onOpen={openDesktopItem}
         onOpenMenu={openDesktopMenu}
+        onDropFiles={dropDesktopFiles}
       />
 
       {/* windows.map turns each saved window object into an actual window on screen. */}
@@ -477,6 +763,7 @@ function Desktop({ account, onSignOut }) {
             key={win.id}
             win={win}
             onClose={closeWindow}
+            closeRequest={closeRequests[win.id] ?? 0}
             onFocus={focusWindow}
             onFrameChange={updateWindowFrame}
             onMinimize={minimizeWindow}
@@ -485,20 +772,38 @@ function Desktop({ account, onSignOut }) {
           >
             {win.type === "notepad" && (
               <Notepad
+                documentName={getNotepadDocumentName(win)}
                 text={win.data.text}
                 onChange={(text) => updateWindowData(win.id, { text })}
                 onSave={() => saveNotepadWindow(win.id)}
+                onOpen={() => openNotepadFileDialog(win.id)}
               />
             )}
-            {win.type === "settings" && <Settings />}
+            {win.type === "settings" && (
+              <Settings
+                backgrounds={backgrounds}
+                files={fileStore.files}
+                folders={fileStore.folders}
+                background={background}
+                homeFolderId={homeFolderId}
+                volume={volume}
+                onBackgroundChange={setBackground}
+                onHomeFolderChange={setHomeFolderId}
+                onVolumeChange={setVolume}
+              />
+            )}
             {win.type === "file-explorer" && (
               <File
                 desktopItems={desktopItems}
                 initialFolder={win.data.initialFolder}
+                rootFolderName={rootFolderName}
                 storageKey={fileStoreKey}
                 storeChangeEvent={fileStoreChangeEvent}
+                homeFolderId={homeFolderId}
+                volume={volume}
                 onOpenApp={openWindow}
                 onOpenFile={openFile}
+                onClose={() => requestAnimatedClose(win.id)}
               />
             )}
             {win.type === "photos" && (
@@ -509,9 +814,12 @@ function Desktop({ account, onSignOut }) {
                 name={win.data.name}
                 dataUrl={win.data.dataUrl}
                 mediaType={win.data.mediaType}
+                volume={volume}
               />
             )}
-            {win.type === "google-chrome" && <Chrome />}
+            {win.type === "google-chrome" && (
+              <Chrome onClose={() => requestAnimatedClose(win.id)} />
+            )}
           </Window>
         )
       ))}
@@ -533,16 +841,45 @@ function Desktop({ account, onSignOut }) {
       {saveDialog && (
         <SaveDialog
           folders={fileStore.folders}
+          files={fileStore.files}
           name={saveDialog.name}
           folderId={saveDialog.folderId}
+          targetFileId={saveDialog.targetFileId}
           onNameChange={(name) =>
-            setSaveDialog((dialog) => ({ ...dialog, name }))
+            setSaveDialog((dialog) => ({ ...dialog, name, targetFileId: "" }))
           }
           onFolderChange={(folderId) =>
-            setSaveDialog((dialog) => ({ ...dialog, folderId }))
+            setSaveDialog((dialog) => ({
+              ...dialog,
+              folderId,
+              targetFileId: "",
+            }))
+          }
+          onTargetChange={(fileId) =>
+            setSaveDialog((dialog) => {
+              const file = fileStore.files.find((item) => item.id === fileId)
+
+              if (!file) return { ...dialog, targetFileId: "" }
+
+              return {
+                ...dialog,
+                targetFileId: file.id,
+                folderId: file.folderId,
+                name: file.name.endsWith(".txt") ? file.name.slice(0, -4) : file.name,
+              }
+            })
           }
           onSave={finishNotepadSave}
           onIgnore={pokeSaveDialog}
+        />
+      )}
+
+      {openDialog && (
+        <OpenTextDialog
+          files={fileStore.files}
+          folders={fileStore.folders}
+          onOpen={finishNotepadOpen}
+          onClose={() => setOpenDialog(null)}
         />
       )}
 
@@ -559,6 +896,11 @@ function Desktop({ account, onSignOut }) {
               onClick={emptyRecycleBin}
             >
               Empty
+            </button>
+          ) : desktopContextMenu.app.desktopKind === "file" ||
+            desktopContextMenu.app.desktopKind === "folder" ? (
+            <button type="button" onClick={() => deleteDesktopItem(desktopContextMenu.app)}>
+              Delete
             </button>
           ) : (
             <>
@@ -583,6 +925,7 @@ function DesktopGrid({
   onPlaceSelected,
   onOpen,
   onOpenMenu,
+  onDropFiles,
 }) {
   const [selectBox, setSelectBox] = useState(null)
   const [dragMove, setDragMove] = useState(null)
@@ -638,9 +981,11 @@ function DesktopGrid({
   }
 
   function startIconDrag(app, e) {
-    const selected = selectedIcons.includes(app.type)
-      ? selectedIcons
-      : [app.type]
+    const selected = e.ctrlKey || e.metaKey
+      ? toggleSelected(selectedIcons, app.type)
+      : selectedIcons.includes(app.type)
+        ? selectedIcons
+        : [app.type]
 
     onSelect(selected)
     setDragMove({
@@ -685,6 +1030,8 @@ function DesktopGrid({
       onPointerDown={startDesktopSelection}
       onPointerMove={moveDesktopSelection}
       onPointerUp={finishDesktopSelection}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={onDropFiles}
     >
       {/* Each app object becomes one desktop icon, in array order. */}
       {apps.map((app) => (
@@ -704,6 +1051,7 @@ function DesktopGrid({
           <button
             className="app-icon-button"
             type="button"
+            aria-label={app.title}
           >
             <img
               src={app.logo}
@@ -755,7 +1103,9 @@ function Taskbar({
   onSignOut,
 }) {
   const iconRefs = useRef({})
-  const [draggedType, setDraggedType] = useState(null)
+  const suppressClickRef = useRef(false)
+  const [dragState, setDragState] = useState(null)
+  const draggedType = dragState?.type ?? null
 
   const openTypes = [...new Set(windows.map((win) => win.type))]
   const visibleTypes = [
@@ -804,24 +1154,56 @@ function Taskbar({
   }
 
   function startTaskbarDrag(type, e) {
-    setDraggedType(type)
+    if (e.button !== 0) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    suppressClickRef.current = false
+    setDragState({
+      type,
+      startX: e.clientX,
+      startY: e.clientY,
+      hasMoved: false,
+    })
     e.currentTarget.setPointerCapture(e.pointerId)
   }
 
+  function updateTaskbarDrag(e) {
+    if (!dragState) return
+
+    const dx = e.clientX - dragState.startX
+    const dy = e.clientY - dragState.startY
+    const hasMoved = dragState.hasMoved || Math.hypot(dx, dy) > 4
+
+    if (hasMoved) {
+      suppressClickRef.current = true
+      setDragState((state) =>
+        state?.hasMoved ? state : { ...state, hasMoved: true },
+      )
+
+      const target = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest("[data-taskbar-type]")
+        ?.getAttribute("data-taskbar-type")
+
+      if (target && target !== dragState.type) {
+        onReorder(dragState.type, target)
+      }
+    }
+  }
+
   function moveTaskbarDrag(targetType) {
-    if (!draggedType || draggedType === targetType) return
+    if (!dragState?.hasMoved || draggedType === targetType) return
     onReorder(draggedType, targetType)
   }
 
   function finishTaskbarDrag() {
-    setDraggedType(null)
+    setDragState(null)
   }
 
   return (
-    <footer className="taskbar">
-      <div className="taskbar-search">Search</div>
-
-      <div className="taskbar-apps">
+    <footer className="taskbar" onPointerMove={updateTaskbarDrag}>
+      <div className={`taskbar-apps ${dragState?.hasMoved ? "taskbar-apps-dragging" : ""}`}>
         {visibleApps.map((app) => {
           const openWindows = windows.filter((win) => win.type === app.type)
           const isOpen = openWindows.length > 0
@@ -829,6 +1211,7 @@ function Taskbar({
           return (
             <div
               key={app.type}
+              data-taskbar-type={app.type}
               className="taskbar-app-wrap"
               onPointerEnter={() => moveTaskbarDrag(app.type)}
             >
@@ -836,17 +1219,34 @@ function Taskbar({
                 ref={(node) => {
                   iconRefs.current[app.type] = node
                 }}
-                className={`taskbar-app ${isOpen ? "taskbar-app-open" : ""}`}
+                className={`taskbar-app taskbar-app-${app.type} ${
+                  isOpen ? "taskbar-app-open" : ""
+                } ${draggedType === app.type ? "taskbar-app-dragging" : ""}`}
                 type="button"
+                aria-label={app.title}
                 onPointerDown={(e) => startTaskbarDrag(app.type, e)}
                 onPointerUp={finishTaskbarDrag}
+                onPointerCancel={finishTaskbarDrag}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   onUnpin(app.type)
                 }}
-                onClick={() => clickTaskbarApp(app, openWindows)}
+                onClick={(e) => {
+                  if (suppressClickRef.current) {
+                    e.preventDefault()
+                    suppressClickRef.current = false
+                    return
+                  }
+
+                  clickTaskbarApp(app, openWindows)
+                }}
               >
-                <img src={app.logo} alt="" />
+                <img
+                  src={app.logo}
+                  alt=""
+                  draggable="false"
+                  onDragStart={(e) => e.preventDefault()}
+                />
               </button>
 
               {openWindows.length > 1 && (
@@ -899,7 +1299,7 @@ function WindowPreview({ win }) {
         )}
         {win.type === "google-chrome" && (
           <div className="preview-chrome">
-            savana-unana.github.io/UPRO/animatrix
+            https://savana-unana.github.io/UPRO/
           </div>
         )}
       </div>
@@ -909,16 +1309,20 @@ function WindowPreview({ win }) {
 
 function SaveDialog({
   folders,
+  files,
   name,
   folderId,
+  targetFileId,
   onNameChange,
   onFolderChange,
+  onTargetChange,
   onSave,
   onIgnore,
 }) {
   const saveFolders = folders.filter(
     (folder) => folder.id !== RECYCLE_BIN_FOLDER_ID,
   )
+  const textFiles = files.filter((file) => isTextFile(file))
 
   function submitSave(e) {
     e.preventDefault()
@@ -955,7 +1359,69 @@ function SaveDialog({
             ))}
           </select>
         </label>
+        <label>
+          Replace file
+          <select
+            value={targetFileId}
+            onChange={(e) => onTargetChange(e.target.value)}
+          >
+            <option value="">Create new file</option>
+            {textFiles.map((file) => (
+              <option key={file.id} value={file.id}>
+                {folderPath(folders, file.folderId)} / {file.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit">Save</button>
+      </form>
+    </div>
+  )
+}
+
+function OpenTextDialog({ files, folders, onOpen, onClose }) {
+  const textFiles = files.filter((file) => isTextFile(file))
+  const [selectedFileId, setSelectedFileId] = useState(textFiles[0]?.id ?? "")
+
+  function submitOpen(e) {
+    e.preventDefault()
+    if (!selectedFileId) return
+    onOpen(selectedFileId)
+  }
+
+  return (
+    <div className="save-overlay" onPointerDown={onClose}>
+      <form
+        className="save-dialog"
+        onSubmit={submitOpen}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <h2>Open note</h2>
+        <label>
+          File
+          <select
+            value={selectedFileId}
+            autoFocus
+            onChange={(e) => setSelectedFileId(e.target.value)}
+          >
+            {textFiles.length === 0 && (
+              <option value="">No saved notes</option>
+            )}
+            {textFiles.map((file) => (
+              <option key={file.id} value={file.id}>
+                {folderPath(folders, file.folderId)} / {file.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={!selectedFileId}>
+            Open
+          </button>
+        </div>
       </form>
     </div>
   )
@@ -983,6 +1449,7 @@ function TaskbarClock() {
 function Window({
   win,
   children,
+  closeRequest,
   onClose,
   onFocus,
   onFrameChange,
@@ -993,6 +1460,12 @@ function Window({
   // action remembers whether the mouse is currently dragging or resizing.
   const [action, setAction] = useState(null)
   const [visualState, setVisualState] = useState("open")
+
+  useEffect(() => {
+    if (!closeRequest) return
+    const timer = setTimeout(() => onClose(win.id), 150)
+    return () => clearTimeout(timer)
+  }, [closeRequest, onClose, win.id])
 
   function startDrag(e) {
     if (win.maximized) return
@@ -1086,7 +1559,9 @@ function Window({
 
   return (
     <section
-      className={`window app-window-${win.type} window-${visualState}`}
+      className={`window app-window-${win.type} window-${
+        closeRequest ? "closing" : visualState
+      }`}
       style={{
         left: win.x,
         top: win.y,
@@ -1104,7 +1579,6 @@ function Window({
         onPointerMove={moveDrag}
         onPointerUp={stopAction}
       >
-        <span>{win.title}</span>
         <div className="window-controls">
           <button
             className="window-control-button"
@@ -1165,10 +1639,26 @@ function getStartingWindowData(type) {
   return {}
 }
 
-function saveTextFile(fileId, title, text, folderId, storageKey = FILE_STORE_KEY) {
-  const store = loadFileStore(storageKey)
-  const name = title.endsWith(".txt") ? title : `${title}.txt`
-  const existing = store.files.find((file) => file.id === fileId)
+function getNotepadDocumentName(win) {
+  return win.data.fileId ? win.title : "Untitled Document"
+}
+
+function saveTextFile(
+  fileId,
+  title,
+  text,
+  folderId,
+  storageKey = FILE_STORE_KEY,
+  rootFolderName = "User Folder",
+  targetFileId = "",
+) {
+  const store = loadFileStore(storageKey, rootFolderName)
+  const existing = store.files.find((file) => file.id === (targetFileId || fileId))
+  const requestedName = title.endsWith(".txt") ? title : `${title}.txt`
+  const existingNames = store.files
+    .filter((file) => file.folderId === folderId && file.id !== existing?.id)
+    .map((file) => file.name)
+  const name = getUniqueFileName(requestedName, existingNames)
   const savedFile = {
     id: existing?.id ?? crypto.randomUUID(),
     name,
@@ -1188,20 +1678,47 @@ function saveTextFile(fileId, title, text, folderId, storageKey = FILE_STORE_KEY
   return savedFile
 }
 
-function loadFileStore(storageKey = FILE_STORE_KEY) {
+function getUniqueFileName(name, existingNames) {
+  if (!existingNames.includes(name)) return name
+
+  const dotIndex = name.lastIndexOf(".")
+  const hasExtension = dotIndex > 0
+  const base = hasExtension ? name.slice(0, dotIndex) : name
+  const extension = hasExtension ? name.slice(dotIndex) : ""
+  let copyNumber = 1
+  let nextName = `${base} (${copyNumber})${extension}`
+
+  while (existingNames.includes(nextName)) {
+    copyNumber += 1
+    nextName = `${base} (${copyNumber})${extension}`
+  }
+
+  return nextName
+}
+
+function toggleSelected(items, item) {
+  return items.includes(item)
+    ? items.filter((current) => current !== item)
+    : [...items, item]
+}
+
+function loadFileStore(storageKey = FILE_STORE_KEY, rootFolderName = "User Folder") {
+  const defaultFolders = getDefaultFileFolders(rootFolderName)
+
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey))
-    if (!saved) return { folders: DEFAULT_FILE_FOLDERS, files: [] }
+    if (!saved) return { folders: defaultFolders, files: [] }
 
     const savedFolders = saved.folders ?? []
     const folders = savedFolders
       .filter((folder) => !REMOVED_DEFAULT_FOLDER_IDS.includes(folder.id))
       .map((folder) => ({
         ...folder,
+        name: folder.id === ROOT_FOLDER_ID ? rootFolderName : folder.name,
         parentId:
           folder.parentId ?? (folder.id === ROOT_FOLDER_ID ? null : ROOT_FOLDER_ID),
       }))
-    const missingDefaults = DEFAULT_FILE_FOLDERS.filter(
+    const missingDefaults = defaultFolders.filter(
       (folder) => !folders.some((savedFolder) => savedFolder.id === folder.id),
     )
 
@@ -1212,11 +1729,17 @@ function loadFileStore(storageKey = FILE_STORE_KEY) {
       ),
     }
   } catch {
-    return { folders: DEFAULT_FILE_FOLDERS, files: [] }
+    return { folders: defaultFolders, files: [] }
   }
 }
 
-function getDesktopApps(store) {
+function getDefaultFileFolders(rootFolderName) {
+  return BASE_DEFAULT_FILE_FOLDERS.map((folder) =>
+    folder.id === ROOT_FOLDER_ID ? { ...folder, name: rootFolderName } : folder,
+  )
+}
+
+function getDesktopItems(store) {
   const binHasFiles = isRecycleBinFull(store)
 
   return [
@@ -1228,7 +1751,38 @@ function getDesktopApps(store) {
       data: { initialFolder: RECYCLE_BIN_FOLDER_ID },
     },
     ...desktopApps,
+    ...store.folders
+      .filter((folder) => folder.parentId === DESKTOP_FOLDER_ID)
+      .map((folder) => ({
+        type: `folder:${folder.id}`,
+        desktopKind: "folder",
+        folderId: folder.id,
+        windowType: "file-explorer",
+        title: folder.name,
+        logo: folderIcon,
+        data: { initialFolder: folder.id },
+      })),
+    ...store.files
+      .filter((file) => file.folderId === DESKTOP_FOLDER_ID)
+      .map((file) => ({
+        type: `file:${file.id}`,
+        desktopKind: "file",
+        fileId: file.id,
+        title: cleanDesktopFileName(file.name),
+        logo: getDesktopFileIcon(file),
+      })),
   ]
+}
+
+function getDesktopFileIcon(file) {
+  if (file.type.startsWith("image/")) return photosIcon
+  if (isMediaFile(file)) return mediaIcon
+  if (file.type.startsWith("text/")) return noteIcon
+  return fileIcon
+}
+
+function cleanDesktopFileName(name) {
+  return name.replace(/\.[^/.]+$/, "")
 }
 
 function isRecycleBinFull(store) {
@@ -1243,8 +1797,8 @@ function placeDesktopApps(apps, oldItems) {
 
   return apps.map((app, index) => {
     const oldItem = oldItems.find((item) => item.type === app.type)
-    let col = app.type === "recycle-bin" ? 1 : oldItem?.col ?? index + 1
-    let row = app.type === "recycle-bin" ? 1 : oldItem?.row ?? 1
+    let col = oldItem?.col ?? (app.type === "recycle-bin" ? 1 : index + 1)
+    let row = oldItem?.row ?? 1
     let tileKey = `${col}-${row}`
 
     if (usedTiles.has(tileKey)) {
@@ -1347,11 +1901,20 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)]
 }
 
-function playSound(sound) {
+function playSound(sound, volume = 1) {
   if (!sound) return
 
   const audio = new Audio(sound)
+  audio.volume = clamp(volume, 0, 1)
   audio.play().catch(() => {})
+}
+
+function cleanAssetName(path) {
+  return path
+    .split("/")
+    .at(-1)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
 }
 
 function clamp(value, min, max) {
@@ -1377,6 +1940,124 @@ function isMediaFile(file) {
     file.type.startsWith("audio/") ||
     /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)
   )
+}
+
+function isTextFile(file) {
+  return file.type.startsWith("text/") || /\.txt$/i.test(file.name)
+}
+
+function getDroppedUrls(dataTransfer) {
+  const uriList = dataTransfer.getData("text/uri-list")
+  const plainText = dataTransfer.getData("text/plain")
+
+  return [...uriList.split(/\r?\n/), plainText]
+    .map((value) => value.trim())
+    .filter((value) => value && !value.startsWith("#"))
+}
+
+function isImageUrl(value) {
+  try {
+    const url = new URL(value)
+    return (
+      ["http:", "https:", "data:"].includes(url.protocol) &&
+      (url.protocol === "data:" || /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)(\?|#|$)/i.test(url.pathname))
+    )
+  } catch {
+    return false
+  }
+}
+
+function makeUrlFile(url, folderId) {
+  const name = getFileNameFromUrl(url)
+
+  return {
+    id: crypto.randomUUID(),
+    name,
+    type: getImageTypeFromName(name),
+    size: 0,
+    folderId,
+    addedAt: Date.now(),
+    text: "",
+    dataUrl: url,
+  }
+}
+
+function getFileNameFromUrl(value) {
+  if (value.startsWith("data:")) return `Dropped image ${Date.now()}.png`
+
+  try {
+    const url = new URL(value)
+    const name = decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) ?? "")
+    return /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i.test(name)
+      ? name
+      : `Dropped image ${Date.now()}.png`
+  } catch {
+    return `Dropped image ${Date.now()}.png`
+  }
+}
+
+function getImageTypeFromName(name) {
+  const extension = name.split(".").at(-1)?.toLowerCase()
+  if (extension === "jpg") return "image/jpeg"
+  if (extension === "svg") return "image/svg+xml"
+  if (extension) return `image/${extension}`
+  return "image/png"
+}
+
+function readFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.readAsDataURL(file)
+  })
+}
+
+async function readStoredFileData(file) {
+  if (canCompressImage(file)) {
+    try {
+      return await compressImageFile(file)
+    } catch {
+      return readFile(file)
+    }
+  }
+
+  return readFile(file)
+}
+
+function canCompressImage(file) {
+  return (
+    file.type.startsWith("image/") &&
+    !["image/gif", "image/svg+xml"].includes(file.type)
+  )
+}
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      const maxSize = 1920
+      const scale = Math.min(1, maxSize / Math.max(image.width, image.height))
+      const width = Math.max(1, Math.round(image.width * scale))
+      const height = Math.max(1, Math.round(image.height * scale))
+      const canvas = document.createElement("canvas")
+      const context = canvas.getContext("2d")
+
+      canvas.width = width
+      canvas.height = height
+      context.drawImage(image, 0, 0, width, height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL("image/jpeg", 0.86))
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error("Could not read image"))
+    }
+
+    image.src = url
+  })
 }
 
 function selectionStyle(box) {
@@ -1406,6 +2087,14 @@ async function authenticateAccount(credentials) {
 
 async function logoutAccount() {
   await fetch("/api/logout", { method: "POST" })
+}
+
+async function refreshAccountSession() {
+  try {
+    await fetch("/api/touch", { method: "POST" })
+  } catch {
+    // Offline/local API downtime should not interrupt the current desktop.
+  }
 }
 
 async function syncAccountState(accountId, state) {

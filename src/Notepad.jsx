@@ -1,4 +1,10 @@
-function Notepad({ text, onChange, onSave }) {
+function Notepad({
+  documentName = "Untitled Document",
+  text,
+  onChange,
+  onOpen,
+  onSave,
+}) {
   const line = text.split("\n").length
   const col = text.split("\n").at(-1).length + 1
 
@@ -12,6 +18,13 @@ function Notepad({ text, onChange, onSave }) {
         }
       }}
     >
+      <header className="notepad-header">
+        <span>{documentName}</span>
+        <button type="button" onClick={onOpen}>
+          Open
+        </button>
+      </header>
+
       <textarea
         className="notes-area"
         value={text}
@@ -26,7 +39,7 @@ function Notepad({ text, onChange, onSave }) {
         <span>Ln {line}, Col {col}</span>
         <span>{text.length} characters</span>
         <button className="notepad-save-button" type="button" onClick={onSave}>
-          💾
+          Save
         </button>
       </div>
     </div>

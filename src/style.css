@@ -218,32 +218,14 @@
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition:
+    background 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
 .taskbar-app:hover {
   background: rgba(255, 255, 255, 0.1);
-}
-
-.taskbar-search {
-  width: 300px;
-  max-width: 26vw;
-  height: 36px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  display: flex;
-  align-items: center;
-  padding: 0 15px;
-  box-sizing: border-box;
-  color: #e8e8e8;
-  font-size: 16px;
-}
-
-.taskbar-search::before {
-  content: "⌕";
-  margin-right: 12px;
-  font-size: 22px;
-  line-height: 1;
 }
 
 .taskbar-apps {
@@ -252,8 +234,13 @@
   gap: 8px;
 }
 
+.taskbar-apps-dragging {
+  cursor: grabbing;
+}
+
 .taskbar-app-wrap {
   position: relative;
+  transition: transform 120ms ease;
 }
 
 .taskbar-app {
@@ -261,11 +248,36 @@
   padding: 5px;
 }
 
+.taskbar-app-dragging {
+  opacity: 0.58;
+  transform: translateY(-4px) scale(0.96);
+  cursor: grabbing;
+}
+
 .taskbar-app img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+.taskbar-app-google-chrome img,
+.taskbar-app-notepad img {
+  width: 80%;
+  height: 80%;
+  margin: 10%;
+}
+
+.taskbar-app-file-explorer img {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.taskbar-app-settings img {
+  width: 80%;
+  height: 80%;
+  margin: 10%;
 }
 
 .taskbar-app-open::after {
@@ -486,32 +498,41 @@
 }
 
 .titlebar {
-  background: #111827;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 126px;
+  height: 48px;
+  background: transparent;
   color: white;
-  padding: 6px;
+  padding: 6px 10px;
   cursor: grab;
   user-select: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 32px;
+  justify-content: flex-end;
   box-sizing: border-box;
+  border: 0;
+  z-index: 3;
+  pointer-events: none;
 }
 
 .window-controls {
   display: flex;
   align-items: center;
   gap: 2px;
+  pointer-events: auto;
 }
 
 .window-control-button {
-  width: 22px;
-  height: 22px;
+  width: 31px;
+  height: 31px;
   border: 0;
   border-radius: 3px;
   background: transparent;
   color: white;
   cursor: pointer;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -525,7 +546,7 @@
 
 .window-body {
   padding: 0;
-  height: calc(100% - 32px);
+  height: 100%;
   overflow: auto;
   box-sizing: border-box;
 }
@@ -535,7 +556,9 @@
 }
 
 .app-window-notepad .titlebar {
-  background: #111827;
+  height: 38px;
+  padding-top: 3px;
+  padding-bottom: 3px;
   color: #ffffff;
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
@@ -557,6 +580,45 @@
   display: flex;
   flex-direction: column;
   font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.notepad-header {
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 144px 0 18px;
+  border-bottom: 1px solid #363636;
+  background: #202020;
+  color: #f5f5f5;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notepad-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notepad-header button {
+  height: 26px;
+  margin-left: auto;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  background: #333;
+  color: #f5f5f5;
+  padding: 0 12px;
+  font: 14px "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.notepad-header button:hover {
+  background: #3d3d3d;
 }
 
 .notes-area {
@@ -610,7 +672,7 @@
 }
 
 .notepad-save-button {
-  min-width: 42px;
+  min-width: 64px;
   font-size: 16px !important;
 }
 
@@ -680,10 +742,135 @@
   background: #3d3d3d;
 }
 
-.settings-panel {
-  padding: 12px;
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-actions button:disabled {
+  opacity: 0.58;
+  cursor: default;
+}
+
+.app-window-settings {
+  background: #202020;
+}
+
+.window-body-settings {
+  overflow: hidden;
+  background: #202020;
+}
+
+.settings-app {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  background: #202020;
+  color: #f5f5f5;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 144px 0 18px;
+  border-bottom: 1px solid #363636;
+  background: #202020;
+  font-size: 18px;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.settings-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.settings-section {
   display: grid;
   gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #363636;
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+}
+
+.settings-section h2 {
+  margin: 0;
+  color: #f5f5f5;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.settings-row,
+.settings-field {
+  display: grid;
+  gap: 7px;
+  color: #d6d6d6;
+  font-size: 15px;
+}
+
+.settings-row-volume {
+  grid-template-columns: 96px minmax(140px, 1fr) 78px;
+  align-items: center;
+}
+
+.settings-field select,
+.settings-number {
+  height: 38px;
+  min-width: 0;
+  border: 1px solid #4a4a4a;
+  border-radius: 5px;
+  background: #2b2b2b;
+  color: #f5f5f5;
+  padding: 0 10px;
+  font: 16px "Segoe UI", system-ui, sans-serif;
+}
+
+.settings-slider {
+  width: 100%;
+  accent-color: #2563eb;
+}
+
+.settings-background-preview {
+  width: min(340px, 100%);
+  aspect-ratio: 16 / 9;
+  border: 1px solid #4a4a4a;
+  background: #111;
+  overflow: hidden;
+}
+
+.settings-background-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.settings-secondary-button {
+  justify-self: start;
+  height: 34px;
+  border: 1px solid #4a4a4a;
+  border-radius: 5px;
+  background: #333;
+  color: #f5f5f5;
+  padding: 0 14px;
+  font: 15px "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.settings-secondary-button:hover {
+  background: #3d3d3d;
 }
 
 .file-app {
@@ -705,25 +892,98 @@
 
 .file-tabs {
   display: flex;
-  align-items: end;
+  align-items: stretch;
   background: #202020;
-  padding-left: 10px;
+  padding: 6px 138px 0 10px;
+  overflow: hidden;
 }
 
-.file-tab {
+.file-tab,
+.chrome-tab {
+  position: relative;
+  border: 0;
   width: 270px;
+  max-width: 30%;
   height: 42px;
-  padding: 0 18px;
-  border-radius: 8px 8px 0 0;
-  background: #2b2b2b;
+  padding: 0 10px 0 14px;
+  border-radius: 11px 11px 0 0;
+  background: transparent;
+  color: #d8d8d8;
   display: flex;
   align-items: center;
+  gap: 10px;
+  text-align: left;
   font-weight: 600;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.file-tab:not(:first-child)::before,
+.chrome-tab:not(:first-child)::before,
+.file-tab + .file-tab-add::before,
+.chrome-tab + .chrome-tab-add::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 1px;
+  background: #4a4a4a;
+}
+
+.file-tab-active,
+.chrome-tab-active {
+  background: #2b2b2b;
+  color: #f5f5f5;
+}
+
+.file-tab-active::before,
+.chrome-tab-active::before,
+.file-tab-active + .file-tab::before,
+.chrome-tab-active + .chrome-tab::before {
+  display: none;
+}
+
+.file-tab img,
+.chrome-tab img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex: 0 0 18px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.file-tab span:not(.app-tab-close),
+.chrome-tab span:not(.app-tab-close) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-tab-close {
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  color: #e5e5e5;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.app-tab-close:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .file-tab-add {
   width: 42px;
   height: 42px;
+  position: relative;
   border: 0;
   background: transparent;
   color: inherit;
@@ -933,6 +1193,11 @@
   outline: 1px solid #9b9b9b;
 }
 
+.file-drop-target {
+  background: rgba(59, 130, 246, 0.32) !important;
+  outline: 1px solid rgba(147, 197, 253, 0.9);
+}
+
 .file-list {
   min-width: 0;
   min-height: 0;
@@ -968,6 +1233,12 @@
 
 .file-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.file-item-selected,
+.file-item-selected:hover {
+  background: rgba(59, 130, 246, 0.28);
+  outline: 1px solid rgba(147, 197, 253, 0.8);
 }
 
 .file-rename-input {
@@ -1006,9 +1277,8 @@
 
 .file-thumb-folder {
   width: 62px;
-  height: 46px;
-  border-radius: 5px;
-  background: linear-gradient(#ffd76a 0 28%, #f5bd22 29%);
+  height: 62px;
+  object-fit: contain;
 }
 
 .file-thumb-video,
@@ -1099,44 +1369,85 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 44px 1fr;
-  background: #050505;
+  grid-template-rows: 48px 62px 1fr;
+  background: #111;
 }
 
-.app-window-google-chrome .titlebar {
-  background: #050505;
+.window-body-google-chrome {
+  background: #111;
+}
+
+.chrome-tabs {
+  display: flex;
+  align-items: stretch;
+  padding: 6px 138px 0 10px;
+  background: #202020;
+  overflow: hidden;
+}
+
+.chrome-tab-add {
+  width: 42px;
+  height: 42px;
+  position: relative;
+  border: 0;
+  background: transparent;
   color: #f5f5f5;
-  border-bottom: 1px solid #262626;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  cursor: pointer;
 }
 
 .chrome-toolbar {
   display: grid;
-  grid-template-columns: 12px 12px 12px 1fr;
+  grid-template-columns: 28px 28px 28px 1fr;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border-bottom: 1px solid #242424;
-  background: #050505;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid #303030;
+  background: #262626;
   box-sizing: border-box;
 }
 
-.chrome-nav-dot {
-  width: 8px;
-  height: 8px;
+.chrome-nav-button {
+  width: 28px;
+  height: 28px;
+  border: 0;
   border-radius: 50%;
-  background: #6b7280;
+  background: transparent;
+  color: #d8d8d8;
+  font: 24px/1 "Segoe UI", system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.chrome-nav-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chrome-nav-button:disabled {
+  color: #6f7682;
+  cursor: default;
+}
+
+.chrome-nav-button img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  display: block;
 }
 
 .chrome-address {
-  height: 28px;
+  height: 40px;
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 12px;
-  border-radius: 14px;
+  padding: 0 18px;
+  border-radius: 20px;
   background: #1f1f1f;
   color: #f5f5f5;
-  font: 13px "Segoe UI", system-ui, sans-serif;
+  font: 18px "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1152,11 +1463,27 @@
   font: inherit;
 }
 
+.chrome-frame-stack {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #111;
+}
+
 .chrome-frame {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
-  background: #050505;
+  background: #2b2b2b;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chrome-frame-active {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .preview-chrome {

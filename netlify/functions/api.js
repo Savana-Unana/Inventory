@@ -16,6 +16,22 @@ export async function handler(event) {
       return json({ ok: true, route, hasBlobsContext: hasBlobsContext() })
     }
 
+    if (event.httpMethod === "GET" && route === "/browser-check") {
+      return json({ ok: true }, 200, { "X-Inventory-Browser-Proxy": "1" })
+    }
+
+    if (event.httpMethod === "GET" && route === "/page-icon") {
+      return handlePageIcon(event)
+    }
+
+    if (event.httpMethod === "GET" && route === "/page-title") {
+      return handlePageTitle(event)
+    }
+
+    if (event.httpMethod === "GET" && route === "/browser") {
+      return handleBrowser(event)
+    }
+
     if (event.httpMethod === "GET" && route === "/session") {
       return handleSession(event)
     }
@@ -32,6 +48,10 @@ export async function handler(event) {
       return handleLogout(event)
     }
 
+    if (event.httpMethod === "POST" && route === "/touch") {
+      return handleTouch(event)
+    }
+
     if (event.httpMethod === "PUT" && route === "/state") {
       return handleState(event)
     }
@@ -46,6 +66,83 @@ export async function handler(event) {
       },
       500,
     )
+  }
+}
+
+async function handleBrowser(event) {
+  const targetUrl = parseBrowserUrl(event.queryStringParameters?.url)
+  if (!targetUrl) {
+    return {
+      statusCode: 400,
+      headers: { "Content-Type": "text/plain" },
+      body: "Invalid URL.",
+    }
+  }
+
+  let response
+  try {
+    response = await fetch(targetUrl)
+  } catch (error) {
+    return {
+      statusCode: 502,
+      headers: { "Content-Type": "text/plain" },
+      body: error.message ? `Could not load page: ${error.message}` : "Could not load page.",
+    }
+  }
+
+  const contentType = response.headers.get("content-type") ?? "text/html"
+  if (!contentType.includes("text/html")) {
+    return {
+      statusCode: 302,
+      headers: { Location: response.url },
+      body: "",
+    }
+  }
+
+  return {
+    statusCode: response.status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Inventory-Browser-Proxy": "1",
+    },
+    body: injectBrowserTracking(await response.text(), response.url),
+  }
+}
+
+async function handlePageIcon(event) {
+  const targetUrl = parseBrowserUrl(event.queryStringParameters?.url)
+  if (!targetUrl) return json({ icon: null }, 400)
+
+  try {
+    const response = await fetch(targetUrl)
+    const contentType = response.headers.get("content-type") ?? ""
+
+    if (!contentType.includes("text/html")) {
+      return json({ icon: getFallbackFavicon(response.url) })
+    }
+
+    const icon = findPageIcon(await response.text(), response.url)
+    return json({ icon: icon ?? getFallbackFavicon(response.url) })
+  } catch {
+    return json({ icon: getFallbackFavicon(targetUrl) })
+  }
+}
+
+async function handlePageTitle(event) {
+  const targetUrl = parseBrowserUrl(event.queryStringParameters?.url)
+  if (!targetUrl) return json({ title: null }, 400)
+
+  try {
+    const response = await fetch(targetUrl)
+    const contentType = response.headers.get("content-type") ?? ""
+
+    if (!contentType.includes("text/html")) {
+      return json({ title: null })
+    }
+
+    return json({ title: findPageTitle(await response.text()) })
+  } catch {
+    return json({ title: null })
   }
 }
 
@@ -66,8 +163,13 @@ async function handleSession(event) {
   const account = accounts.find((item) => item.id === session.accountId)
   if (!account) return json({ message: "Sign in required." }, 401)
 
-  await writeBlobJson(store, sessionsKey, nextSessions)
-  return json(await makeAccountPayload(store, account))
+  const { session: refreshedSession, sessions: refreshedSessions } =
+    refreshSession(nextSessions, session.id)
+
+  await writeBlobJson(store, sessionsKey, refreshedSessions)
+  return json(await makeAccountPayload(store, account), 200, {
+    "Set-Cookie": makeSessionCookie(refreshedSession),
+  })
 }
 
 async function handleSignup(event) {
@@ -154,10 +256,34 @@ async function handleLogout(event) {
   }
 }
 
+async function handleTouch(event) {
+  const store = getBlobStore()
+  const sessions = await readBlobJson(store, sessionsKey, [])
+  const { session, sessions: validSessions } = getValidSession(
+    sessions,
+    getCookie(event, sessionCookie),
+  )
+
+  if (!session) {
+    await writeBlobJson(store, sessionsKey, validSessions)
+    return json({ message: "Sign in required." }, 401)
+  }
+
+  const { session: refreshedSession, sessions: nextSessions } = refreshSession(
+    validSessions,
+    session.id,
+  )
+
+  await writeBlobJson(store, sessionsKey, nextSessions)
+  return json({ ok: true }, 200, {
+    "Set-Cookie": makeSessionCookie(refreshedSession),
+  })
+}
+
 async function handleState(event) {
   const store = getBlobStore()
   const sessions = await readBlobJson(store, sessionsKey, [])
-  const { session, sessions: nextSessions } = getValidSession(
+  const { session, sessions: validSessions } = getValidSession(
     sessions,
     getCookie(event, sessionCookie),
   )
@@ -171,10 +297,16 @@ async function handleState(event) {
     fileStore: body.fileStore ?? current.fileStore,
     updatedAt: Date.now(),
   }
+  const { session: refreshedSession, sessions: nextSessions } = refreshSession(
+    validSessions,
+    session.id,
+  )
 
   await writeBlobJson(store, sessionsKey, nextSessions)
   await writeUserData(store, session.accountId, nextUserData)
-  return json({ ok: true })
+  return json({ ok: true }, 200, {
+    "Set-Cookie": makeSessionCookie(refreshedSession),
+  })
 }
 
 function getBlobStore() {
@@ -273,6 +405,20 @@ function getValidSession(sessions, sessionId) {
   return { session, sessions: nextSessions }
 }
 
+function refreshSession(sessions, sessionId) {
+  const refreshedSession = {
+    ...sessions.find((item) => item.id === sessionId),
+    expiresAt: Date.now() + sessionDurationMs,
+  }
+
+  return {
+    session: refreshedSession,
+    sessions: sessions.map((item) =>
+      item.id === sessionId ? refreshedSession : item,
+    ),
+  }
+}
+
 function makeSessionCookie(session) {
   return `${sessionCookie}=${encodeURIComponent(session.id)}; Path=/; Max-Age=${
     sessionDurationMs / 1000
@@ -325,4 +471,175 @@ function json(body, statusCode = 200, headers = {}) {
     },
     body: JSON.stringify(body),
   }
+}
+
+function parseBrowserUrl(value) {
+  try {
+    const url = new URL(String(value ?? ""))
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.href
+      : null
+  } catch {
+    return null
+  }
+}
+
+function findPageIcon(html, pageUrl) {
+  const linkPattern = /<link\b[^>]*>/gi
+  const candidates = []
+  let match = linkPattern.exec(html)
+
+  while (match) {
+    const tag = match[0]
+    const rel = getHtmlAttribute(tag, "rel")?.toLowerCase() ?? ""
+    const href = getHtmlAttribute(tag, "href")
+
+    if (href && /\b(icon|shortcut icon|apple-touch-icon)\b/.test(rel)) {
+      candidates.push({ rel, href })
+    }
+
+    match = linkPattern.exec(html)
+  }
+
+  const preferred =
+    candidates.find((item) => item.rel.includes("icon") && !item.rel.includes("apple")) ??
+    candidates[0]
+
+  if (!preferred) return null
+
+  try {
+    return new URL(preferred.href, pageUrl).href
+  } catch {
+    return null
+  }
+}
+
+function getHtmlAttribute(tag, name) {
+  const match = tag.match(new RegExp(`${name}=["']([^"']+)["']`, "i"))
+  return match?.[1] ?? null
+}
+
+function findPageTitle(html) {
+  const match = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)
+  return match ? decodeHtml(match[1]).trim() || null : null
+}
+
+function decodeHtml(value) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
+function getFallbackFavicon(pageUrl) {
+  try {
+    return `${new URL(pageUrl).origin}/favicon.ico`
+  } catch {
+    return null
+  }
+}
+
+function injectBrowserTracking(html, pageUrl) {
+  const safeUrl = JSON.stringify(pageUrl)
+  const baseTag = `<base href="${escapeHtml(pageUrl)}">`
+  const script = `<script>
+(() => {
+  let realUrl = ${safeUrl};
+  const proxyUrl = (url) => "/api/browser?url=" + encodeURIComponent(url);
+  const report = (url = realUrl) => {
+    realUrl = url;
+    parent.postMessage({ type: "inventory-browser-url", url, title: document.title }, "*");
+  };
+  const resolveRealUrl = (value) => {
+    if (!value) return realUrl;
+    return new URL(value, realUrl).href;
+  };
+
+  report();
+  window.addEventListener("message", (event) => {
+    if (event.data?.type === "inventory-browser-ready") report();
+  });
+  window.addEventListener("popstate", () => report(resolveRealUrl(location.pathname + location.search + location.hash)));
+  window.addEventListener("hashchange", () => report(resolveRealUrl(location.hash)));
+
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function patchedHistoryMethod(state, title, nextUrl) {
+      const result = original.apply(this, arguments);
+      if (nextUrl) report(resolveRealUrl(nextUrl));
+      return result;
+    };
+  }
+
+  for (const method of ["assign", "replace"]) {
+    try {
+      const original = location[method].bind(location);
+      location[method] = (nextUrl) => {
+        const resolvedUrl = resolveRealUrl(nextUrl);
+        report(resolvedUrl);
+        original(proxyUrl(resolvedUrl));
+      };
+    } catch {}
+  }
+
+  try {
+    const originalOpen = window.open.bind(window);
+    window.open = (nextUrl, target, features) => {
+      if (!nextUrl) return originalOpen(nextUrl, target, features);
+      const resolvedUrl = resolveRealUrl(nextUrl);
+      report(resolvedUrl);
+      return originalOpen(proxyUrl(resolvedUrl), target, features);
+    };
+  } catch {}
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const method = (form.method || "get").toLowerCase();
+    if (method !== "get") return;
+
+    const action = form.action || realUrl;
+    const nextUrl = new URL(action, realUrl);
+    const data = new FormData(form);
+    for (const [key, value] of data.entries()) nextUrl.searchParams.set(key, value);
+
+    event.preventDefault();
+    report(nextUrl.href);
+    window.location.href = proxyUrl(nextUrl.href);
+  });
+
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest?.("a[href]");
+    if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+
+    const nextUrl = new URL(link.getAttribute("href"), realUrl).href;
+    if (!/^https?:/.test(nextUrl)) return;
+
+    event.preventDefault();
+    report(nextUrl);
+    window.location.href = proxyUrl(nextUrl);
+  });
+})();
+</script>`
+
+  return html.includes("</head>")
+    ? html.replace("</head>", `${baseTag}${script}</head>`)
+    : `${baseTag}${script}${html}`
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => {
+    const escapes = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }
+
+    return escapes[char]
+  })
 }
