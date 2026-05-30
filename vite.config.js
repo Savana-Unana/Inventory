@@ -7,6 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://127.0.0.1:3000",
+      "/ArtIt": {
+        target: "https://savana-unana.github.io",
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })

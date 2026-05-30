@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import "./style.css"
+import ArtIt from "./ArtIt.jsx"
 import Chrome from "./Chrome.jsx"
 import File from "./File.jsx"
 import Join from "./Join.jsx"
@@ -16,6 +17,7 @@ import chromeIcon from "./assets/logos/GoogleChrome.png"
 import folderIcon from "./assets/logos/Folder.png"
 import mediaIcon from "./assets/logos/MediaPlayer.png"
 import photosIcon from "./assets/logos/Photos.png"
+import artItIcon from "./assets/logos/ArtIt.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
@@ -74,6 +76,11 @@ const desktopApps = [
     type: "google-chrome",
     title: "Google Chrome",
     logo: chromeIcon,
+  },
+  {
+    type: "drawing",
+    title: "Art It!",
+    logo: artItIcon,
   },
 ]
 
@@ -672,6 +679,31 @@ function Desktop({ account, onSignOut }) {
     setSaveDialog(null)
   }
 
+  function finishArtItSave() {
+    if (!saveDialog?.dataUrl) return
+
+    saveImageFile(
+      saveDialog.name,
+      saveDialog.type,
+      saveDialog.dataUrl,
+      saveDialog.folderId,
+      fileStoreKey,
+      rootFolderName,
+      saveDialog.targetFileId,
+    )
+    window.dispatchEvent(new Event(fileStoreChangeEvent))
+    setFileStore(loadFileStore(fileStoreKey, rootFolderName))
+    setSaveDialog(null)
+  }
+
+  function finishArtItLocationPick() {
+    saveDialog?.respond?.({
+      folderId: saveDialog.folderId,
+      label: folderPath(fileStore.folders, saveDialog.folderId),
+    })
+    setSaveDialog(null)
+  }
+
   function finishNotepadOpen(fileId) {
     const file = fileStore.files.find((item) => item.id === fileId)
     if (!file || !openDialog) return
@@ -693,6 +725,50 @@ function Desktop({ account, onSignOut }) {
       ),
     )
     setOpenDialog(null)
+  }
+
+  function saveArtItExport({ name, type, dataUrl, folderId }) {
+    if (!dataUrl) return
+
+    if (folderId) {
+      saveImageFile(
+        name,
+        type,
+        dataUrl,
+        folderId,
+        fileStoreKey,
+        rootFolderName,
+      )
+      window.dispatchEvent(new Event(fileStoreChangeEvent))
+      setFileStore(loadFileStore(fileStoreKey, rootFolderName))
+      return
+    }
+
+    setSaveDialog({
+      kind: "image",
+      title: "Save image",
+      name: getFileStem(normalizePngFileName(name)),
+      folderId: DESKTOP_FOLDER_ID,
+      targetFileId: "",
+      fileType: "image",
+      showName: false,
+      extension: ".png",
+      type: type || "image/png",
+      dataUrl,
+    })
+  }
+
+  function pickArtItSaveLocation({ name, respond }) {
+    setSaveDialog({
+      kind: "image-location",
+      title: "Choose export folder",
+      name: getFileStem(normalizePngFileName(name)),
+      folderId: DESKTOP_FOLDER_ID,
+      targetFileId: "",
+      fileType: "image",
+      showName: false,
+      respond,
+    })
   }
 
   function pokeSaveDialog() {
@@ -820,6 +896,12 @@ function Desktop({ account, onSignOut }) {
             {win.type === "google-chrome" && (
               <Chrome onClose={() => requestAnimatedClose(win.id)} />
             )}
+            {win.type === "drawing" && (
+              <ArtIt
+                onExport={saveArtItExport}
+                onPickSaveLocation={pickArtItSaveLocation}
+              />
+            )}
           </Window>
         )
       ))}
@@ -842,6 +924,10 @@ function Desktop({ account, onSignOut }) {
         <SaveDialog
           folders={fileStore.folders}
           files={fileStore.files}
+          title={saveDialog.title}
+          fileType={saveDialog.fileType}
+          showName={saveDialog.showName}
+          canReplace={!saveDialog.kind?.startsWith("image")}
           name={saveDialog.name}
           folderId={saveDialog.folderId}
           targetFileId={saveDialog.targetFileId}
@@ -865,11 +951,17 @@ function Desktop({ account, onSignOut }) {
                 ...dialog,
                 targetFileId: file.id,
                 folderId: file.folderId,
-                name: file.name.endsWith(".txt") ? file.name.slice(0, -4) : file.name,
+                name: getFileStem(file.name),
               }
             })
           }
-          onSave={finishNotepadSave}
+          onSave={
+            saveDialog.kind === "image-location"
+              ? finishArtItLocationPick
+              : saveDialog.kind === "image"
+                ? finishArtItSave
+                : finishNotepadSave
+          }
           onIgnore={pokeSaveDialog}
         />
       )}
@@ -1310,6 +1402,10 @@ function WindowPreview({ win }) {
 function SaveDialog({
   folders,
   files,
+  title = "Save note",
+  fileType = "text",
+  showName = true,
+  canReplace = true,
   name,
   folderId,
   targetFileId,
@@ -1322,7 +1418,9 @@ function SaveDialog({
   const saveFolders = folders.filter(
     (folder) => folder.id !== RECYCLE_BIN_FOLDER_ID,
   )
-  const textFiles = files.filter((file) => isTextFile(file))
+  const replaceFiles = files.filter((file) =>
+    fileType === "image" ? isImageFile(file) : isTextFile(file),
+  )
 
   function submitSave(e) {
     e.preventDefault()
@@ -1337,15 +1435,17 @@ function SaveDialog({
         onSubmit={submitSave}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <h2>Save note</h2>
-        <label>
-          Name
-          <input
-            value={name}
-            autoFocus
-            onChange={(e) => onNameChange(e.target.value)}
-          />
-        </label>
+        <h2>{title}</h2>
+        {showName && (
+          <label>
+            Name
+            <input
+              value={name}
+              autoFocus
+              onChange={(e) => onNameChange(e.target.value)}
+            />
+          </label>
+        )}
         <label>
           Place
           <select
@@ -1359,20 +1459,22 @@ function SaveDialog({
             ))}
           </select>
         </label>
-        <label>
-          Replace file
-          <select
-            value={targetFileId}
-            onChange={(e) => onTargetChange(e.target.value)}
-          >
-            <option value="">Create new file</option>
-            {textFiles.map((file) => (
-              <option key={file.id} value={file.id}>
-                {folderPath(folders, file.folderId)} / {file.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {canReplace && (
+          <label>
+            Replace file
+            <select
+              value={targetFileId}
+              onChange={(e) => onTargetChange(e.target.value)}
+            >
+              <option value="">Create new file</option>
+              {replaceFiles.map((file) => (
+                <option key={file.id} value={file.id}>
+                  {folderPath(folders, file.folderId)} / {file.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="submit">Save</button>
       </form>
     </div>
@@ -1678,6 +1780,39 @@ function saveTextFile(
   return savedFile
 }
 
+function saveImageFile(
+  title,
+  type,
+  dataUrl,
+  folderId,
+  storageKey = FILE_STORE_KEY,
+  rootFolderName = "User Folder",
+  targetFileId = "",
+) {
+  const store = loadFileStore(storageKey, rootFolderName)
+  const existing = store.files.find((file) => file.id === targetFileId)
+  const requestedName = normalizePngFileName(title)
+  const existingNames = store.files
+    .filter((file) => file.folderId === folderId && file.id !== existing?.id)
+    .map((file) => file.name)
+  const savedFile = {
+    id: existing?.id ?? crypto.randomUUID(),
+    name: getUniqueFileName(requestedName, existingNames),
+    type: type || "image/png",
+    size: getDataUrlSize(dataUrl),
+    folderId,
+    addedAt: existing?.addedAt ?? Date.now(),
+    text: "",
+    dataUrl,
+  }
+  const files = existing
+    ? store.files.map((file) => (file.id === savedFile.id ? savedFile : file))
+    : [savedFile, ...store.files]
+
+  localStorage.setItem(storageKey, JSON.stringify({ ...store, files }))
+  return savedFile
+}
+
 function getUniqueFileName(name, existingNames) {
   if (!existingNames.includes(name)) return name
 
@@ -1694,6 +1829,25 @@ function getUniqueFileName(name, existingNames) {
   }
 
   return nextName
+}
+
+function normalizePngFileName(name) {
+  const cleanName = String(name ?? "")
+    .trim()
+    .replace(/\.p(?=.*\.png$)/i, ".")
+    .replace(/pngng$/i, "png")
+    .replace(/[<>:"/\\|?*]/g, "-") || "Art It!"
+
+  return cleanName.toLowerCase().endsWith(".png") ? cleanName : `${cleanName}.png`
+}
+
+function getFileStem(name) {
+  return String(name ?? "").replace(/\.[^/.]+$/, "")
+}
+
+function getDataUrlSize(dataUrl) {
+  const base64 = dataUrl.split(",")[1] ?? ""
+  return Math.round((base64.length * 3) / 4)
 }
 
 function toggleSelected(items, item) {
@@ -1944,6 +2098,10 @@ function isMediaFile(file) {
 
 function isTextFile(file) {
   return file.type.startsWith("text/") || /\.txt$/i.test(file.name)
+}
+
+function isImageFile(file) {
+  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i.test(file.name)
 }
 
 function getDroppedUrls(dataTransfer) {

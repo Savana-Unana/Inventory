@@ -90,6 +90,19 @@ app.get("/api/browser", async (req, res) => {
   }
 })
 
+app.get(/^\/ArtIt\/.*/, async (req, res) => {
+  try {
+    const targetUrl = new URL(req.originalUrl, "https://savana-unana.github.io")
+    const response = await fetch(targetUrl)
+    const contentType = response.headers.get("content-type")
+
+    if (contentType) res.set("Content-Type", contentType)
+    res.status(response.status).send(Buffer.from(await response.arrayBuffer()))
+  } catch (error) {
+    res.status(502).send(error.message ? `Could not load Art It asset: ${error.message}` : "Could not load Art It asset.")
+  }
+})
+
 app.get("/api/session", async (req, res) => {
   const db = await readDb()
   const session = getValidSession(db, req.cookies[sessionCookie])
@@ -386,10 +399,66 @@ function getFallbackFavicon(pageUrl) {
 
 function injectBrowserTracking(html, pageUrl) {
   const safeUrl = JSON.stringify(pageUrl)
+  const isArtItPage = pageUrl.startsWith("https://savana-unana.github.io/ArtIt")
   const baseTag = `<base href="${escapeHtml(pageUrl)}">`
   const script = `<script>
 (() => {
   let realUrl = ${safeUrl};
+  const isInventoryArtIt = ${JSON.stringify(isArtItPage)};
+  const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  const cleanFileName = (name) => {
+    const clean = String(name || "Art It!").trim().replace(/[<>:"/\\\\|?*]/g, "-") || "Art It!";
+    return clean.toLowerCase().endsWith(".png") ? clean : clean + ".png";
+  };
+  let saveRequestId = 0;
+  const requestInventorySaveLocation = (name) => new Promise((resolve) => {
+    const requestId = ++saveRequestId;
+    const receiveResponse = (event) => {
+      if (event.data?.type !== "inventory-file-save-response") return;
+      if (event.data.requestId !== requestId) return;
+      window.removeEventListener("message", receiveResponse);
+      resolve({
+        folderId: event.data.folderId,
+        label: event.data.label || "Inventory",
+        fileName: cleanFileName(name),
+      });
+    };
+
+    window.addEventListener("message", receiveResponse);
+    parent.postMessage({
+      type: "inventory-file-save-request",
+      requestId,
+      name: cleanFileName(name),
+    }, "*");
+  });
+  const objectUrls = new Map();
+  if (isInventoryArtIt) {
+    const originalCreateObjectUrl = URL.createObjectURL.bind(URL);
+    const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = (value) => {
+      const url = originalCreateObjectUrl(value);
+      if (value instanceof Blob) objectUrls.set(url, value);
+      return url;
+    };
+    URL.revokeObjectURL = (url) => {
+      setTimeout(() => objectUrls.delete(url), 15000);
+      originalRevokeObjectUrl(url);
+    };
+  }
+  const postExport = async (name, blob, destination = {}) => {
+    parent.postMessage({
+      type: "inventory-file-export",
+      name: cleanFileName(name),
+      folderId: destination.folderId,
+      mimeType: blob.type || "application/octet-stream",
+      dataUrl: await blobToDataUrl(blob),
+    }, "*");
+  };
   const proxyUrl = (url) => "/api/browser?url=" + encodeURIComponent(url);
   const report = (url = realUrl) => {
     realUrl = url;
@@ -401,6 +470,54 @@ function injectBrowserTracking(html, pageUrl) {
   };
 
   report();
+  if (isInventoryArtIt) {
+    try {
+      Object.defineProperty(window, "showSaveFilePicker", {
+        value: async (options = {}) => {
+          const destination = await requestInventorySaveLocation(options.suggestedName);
+          return {
+            name: destination.label,
+            async createWritable() {
+              const chunks = [];
+              return {
+                async write(chunk) {
+                  chunks.push(chunk);
+                },
+                async close() {
+                  await postExport(
+                    destination.fileName,
+                    new Blob(chunks, { type: "image/png" }),
+                    destination,
+                  );
+                },
+              };
+            },
+          };
+        },
+        configurable: true,
+      });
+    } catch {}
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function patchedAnchorClick() {
+      const href = this.getAttribute("href");
+      const download = this.getAttribute("download");
+      if (download && href && (href.startsWith("blob:") || href.startsWith("data:"))) {
+        const blob = objectUrls.get(href);
+        if (blob) {
+          postExport(download, blob).catch(() => {});
+          return;
+        }
+
+        fetch(href)
+          .then((response) => response.blob())
+          .then((blob) => postExport(download, blob))
+          .catch(() => {});
+        return;
+      }
+
+      return originalAnchorClick.call(this);
+    };
+  }
   window.addEventListener("message", (event) => {
     if (event.data?.type === "inventory-browser-ready") report();
   });
@@ -438,6 +555,8 @@ function injectBrowserTracking(html, pageUrl) {
   } catch {}
 
   document.addEventListener("submit", (event) => {
+    if (event.defaultPrevented) return;
+
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
 
@@ -455,6 +574,19 @@ function injectBrowserTracking(html, pageUrl) {
   });
 
   document.addEventListener("click", (event) => {
+    const downloadLink = event.target.closest?.("a[download][href]");
+    if (downloadLink) {
+      const href = downloadLink.getAttribute("href");
+      if (href?.startsWith("blob:") || href?.startsWith("data:")) {
+        event.preventDefault();
+        fetch(href)
+          .then((response) => response.blob())
+          .then((blob) => postExport(downloadLink.getAttribute("download"), blob))
+          .catch(() => {});
+      }
+      return;
+    }
+
     const link = event.target.closest?.("a[href]");
     if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
 

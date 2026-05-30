@@ -280,6 +280,12 @@
   margin: 10%;
 }
 
+.taskbar-app-drawing img {
+  width: 86%;
+  height: 86%;
+  margin: 7%;
+}
+
 .taskbar-app-open::after {
   content: "";
   position: absolute;
@@ -445,6 +451,40 @@
   box-sizing: border-box;
   animation: window-open 140ms ease-out;
   transform-origin: center;
+}
+
+.app-window-drawing,
+.window-body-drawing {
+  background: #202020;
+}
+
+.window-body-drawing {
+  overflow: hidden;
+}
+
+.artit-app {
+  position: relative;
+  height: 100%;
+  background: #202020;
+}
+
+.artit-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #202020;
+}
+
+.artit-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #202020;
+  color: #f5f5f5;
+  font: 16px "Segoe UI", system-ui, sans-serif;
+  z-index: 1;
 }
 
 .window-closing {
