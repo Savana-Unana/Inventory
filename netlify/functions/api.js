@@ -9,8 +9,6 @@ const sessionsKey = "sessions.json"
 
 export async function handler(event) {
   try {
-    connectLambda(event)
-
     const route = getRoute(event)
     if (event.httpMethod === "GET" && route === "/health") {
       return json({ ok: true, route, hasBlobsContext: hasBlobsContext() })
@@ -30,6 +28,10 @@ export async function handler(event) {
 
     if (event.httpMethod === "GET" && route === "/browser") {
       return handleBrowser(event)
+    }
+
+    if (event.httpMethod === "GET" && route.startsWith("/artit/")) {
+      return handleArtItAsset(event, route)
     }
 
     if (event.httpMethod === "GET" && route === "/session") {
@@ -109,6 +111,37 @@ async function handleBrowser(event) {
   }
 }
 
+async function handleArtItAsset(event, route) {
+  try {
+    const targetUrl = new URL(
+      route.replace(/^\/artit/i, "/ArtIt") + getRawQuery(event),
+      "https://savana-unana.github.io",
+    )
+    const response = await fetch(targetUrl)
+    const headers = {}
+    const contentType = response.headers.get("content-type")
+    const cacheControl = response.headers.get("cache-control")
+
+    if (contentType) headers["Content-Type"] = contentType
+    if (cacheControl) headers["Cache-Control"] = cacheControl
+
+    return {
+      statusCode: response.status,
+      headers,
+      body: Buffer.from(await response.arrayBuffer()).toString("base64"),
+      isBase64Encoded: true,
+    }
+  } catch (error) {
+    return {
+      statusCode: 502,
+      headers: { "Content-Type": "text/plain" },
+      body: error.message
+        ? `Could not load Art It asset: ${error.message}`
+        : "Could not load Art It asset.",
+    }
+  }
+}
+
 async function handlePageIcon(event) {
   const targetUrl = parseBrowserUrl(event.queryStringParameters?.url)
   if (!targetUrl) return json({ icon: null }, 400)
@@ -147,6 +180,8 @@ async function handlePageTitle(event) {
 }
 
 async function handleSession(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const accounts = await readBlobJson(store, accountsKey, [])
   const sessions = await readBlobJson(store, sessionsKey, [])
@@ -173,6 +208,8 @@ async function handleSession(event) {
 }
 
 async function handleSignup(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const accounts = await readBlobJson(store, accountsKey, [])
   const sessions = await readBlobJson(store, sessionsKey, [])
@@ -211,6 +248,8 @@ async function handleSignup(event) {
 }
 
 async function handleLogin(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const accounts = await readBlobJson(store, accountsKey, [])
   const sessions = await readBlobJson(store, sessionsKey, [])
@@ -238,6 +277,8 @@ async function handleLogin(event) {
 }
 
 async function handleLogout(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const sessionId = getCookie(event, sessionCookie)
   const sessions = await readBlobJson(store, sessionsKey, [])
@@ -257,6 +298,8 @@ async function handleLogout(event) {
 }
 
 async function handleTouch(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const sessions = await readBlobJson(store, sessionsKey, [])
   const { session, sessions: validSessions } = getValidSession(
@@ -281,6 +324,8 @@ async function handleTouch(event) {
 }
 
 async function handleState(event) {
+  connectLambda(event)
+
   const store = getBlobStore()
   const sessions = await readBlobJson(store, sessionsKey, [])
   const { session, sessions: validSessions } = getValidSession(
@@ -358,6 +403,18 @@ function getRoute(event) {
   return path
     .replace(/^\/api/, "")
     .replace(/^\/\.netlify\/functions\/api/, "") || "/"
+}
+
+function getRawQuery(event) {
+  const rawUrl = event.rawUrl ?? ""
+  const queryStart = rawUrl.indexOf("?")
+
+  if (queryStart !== -1) return rawUrl.slice(queryStart)
+
+  const params = event.queryStringParameters
+  if (!params || Object.keys(params).length === 0) return ""
+
+  return `?${new URLSearchParams(params).toString()}`
 }
 
 function parseBody(event) {

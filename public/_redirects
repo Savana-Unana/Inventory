@@ -1,3 +1,4 @@
 /api/*  /.netlify/functions/api/:splat  200
 /debug  /.netlify/functions/debug  200
+/ArtIt/*  /.netlify/functions/api/artit/:splat  200
 /*  /index.html  200

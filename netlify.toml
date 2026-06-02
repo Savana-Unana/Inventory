@@ -14,6 +14,11 @@
   status = 200
 
 [[redirects]]
+  from = "/ArtIt/*"
+  to = "/.netlify/functions/api/artit/:splat"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
