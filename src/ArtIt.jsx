@@ -57,7 +57,8 @@ function ArtIt({ onExport, onPickSaveLocation }) {
         className="artit-frame"
         src={`/api/browser?url=${encodeURIComponent(ART_IT_URL)}`}
         title="Art It!"
-        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+        allow="autoplay; fullscreen; gamepad"
+        sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
         onLoad={notifyReady}
       />
     </div>

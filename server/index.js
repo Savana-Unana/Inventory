@@ -617,9 +617,13 @@ function injectBrowserTracking(html, pageUrl) {
 })();
 </script>`
 
-  return html.includes("</head>")
-    ? html.replace("</head>", `${baseTag}${script}</head>`)
-    : `${baseTag}${script}${html}`
+  const htmlWithBase = html.includes("<head>")
+    ? html.replace("<head>", `<head>${baseTag}`)
+    : `${baseTag}${html}`
+
+  return htmlWithBase.includes("</head>")
+    ? htmlWithBase.replace("</head>", `${script}</head>`)
+    : `${script}${htmlWithBase}`
 }
 
 function escapeHtml(value) {

@@ -14,7 +14,8 @@ function ElementFight() {
         className="remote-frame"
         src={`/api/browser?url=${encodeURIComponent(ELEMENT_FIGHT_URL)}`}
         title="Element Fight"
-        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+        allow="autoplay; fullscreen; gamepad"
+        sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
         onLoad={() => setReady(true)}
       />
     </div>
