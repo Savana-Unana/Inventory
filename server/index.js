@@ -103,6 +103,23 @@ app.get(/^\/ArtIt\/.*/, async (req, res) => {
   }
 })
 
+app.get(/^\/ElementFight\/.*/, async (req, res) => {
+  try {
+    const targetUrl = new URL(req.originalUrl, "https://savana-unana.github.io")
+    const response = await fetch(targetUrl)
+    const contentType = response.headers.get("content-type")
+
+    if (contentType) res.set("Content-Type", contentType)
+    res.status(response.status).send(Buffer.from(await response.arrayBuffer()))
+  } catch (error) {
+    res.status(502).send(
+      error.message
+        ? `Could not load Element Fight asset: ${error.message}`
+        : "Could not load Element Fight asset.",
+    )
+  }
+})
+
 app.get("/api/session", async (req, res) => {
   const db = await readDb()
   const session = getValidSession(db, req.cookies[sessionCookie])

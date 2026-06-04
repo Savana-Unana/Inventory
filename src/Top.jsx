@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import "./style.css"
 import ArtIt from "./ArtIt.jsx"
 import Chrome from "./Chrome.jsx"
+import ElementFight from "./ElementFight.jsx"
 import File from "./File.jsx"
 import Join from "./Join.jsx"
 import Media from "./Media.jsx"
@@ -18,6 +19,7 @@ import folderIcon from "./assets/logos/Folder.png"
 import mediaIcon from "./assets/logos/MediaPlayer.png"
 import photosIcon from "./assets/logos/Photos.png"
 import artItIcon from "./assets/logos/ArtIt.png"
+import elementIcon from "./assets/logos/Element.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
@@ -81,6 +83,11 @@ const desktopApps = [
     type: "drawing",
     title: "Art It!",
     logo: artItIcon,
+  },
+  {
+    type: "element-fight",
+    title: "Element Fight",
+    logo: elementIcon,
   },
 ]
 
@@ -902,6 +909,9 @@ function Desktop({ account, onSignOut }) {
                 onPickSaveLocation={pickArtItSaveLocation}
               />
             )}
+            {win.type === "element-fight" && (
+              <ElementFight />
+            )}
           </Window>
         )
       ))}
@@ -1392,6 +1402,11 @@ function WindowPreview({ win }) {
         {win.type === "google-chrome" && (
           <div className="preview-chrome">
             https://savana-unana.github.io/UPRO/
+          </div>
+        )}
+        {win.type === "element-fight" && (
+          <div className="preview-chrome">
+            https://savana-unana.github.io/ElementFight/
           </div>
         )}
       </div>

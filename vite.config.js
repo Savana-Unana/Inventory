@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      "/ElementFight": {
+        target: "https://savana-unana.github.io",
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })

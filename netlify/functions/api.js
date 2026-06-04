@@ -34,6 +34,10 @@ export async function handler(event) {
       return handleArtItAsset(event, route)
     }
 
+    if (event.httpMethod === "GET" && route.startsWith("/elementfight/")) {
+      return handleElementFightAsset(event, route)
+    }
+
     if (event.httpMethod === "GET" && route === "/session") {
       return handleSession(event)
     }
@@ -138,6 +142,37 @@ async function handleArtItAsset(event, route) {
       body: error.message
         ? `Could not load Art It asset: ${error.message}`
         : "Could not load Art It asset.",
+    }
+  }
+}
+
+async function handleElementFightAsset(event, route) {
+  try {
+    const targetUrl = new URL(
+      route.replace(/^\/elementfight/i, "/ElementFight") + getRawQuery(event),
+      "https://savana-unana.github.io",
+    )
+    const response = await fetch(targetUrl)
+    const headers = {}
+    const contentType = response.headers.get("content-type")
+    const cacheControl = response.headers.get("cache-control")
+
+    if (contentType) headers["Content-Type"] = contentType
+    if (cacheControl) headers["Cache-Control"] = cacheControl
+
+    return {
+      statusCode: response.status,
+      headers,
+      body: Buffer.from(await response.arrayBuffer()).toString("base64"),
+      isBase64Encoded: true,
+    }
+  } catch (error) {
+    return {
+      statusCode: 502,
+      headers: { "Content-Type": "text/plain" },
+      body: error.message
+        ? `Could not load Element Fight asset: ${error.message}`
+        : "Could not load Element Fight asset.",
     }
   }
 }

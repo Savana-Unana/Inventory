@@ -262,6 +262,7 @@
 }
 
 .taskbar-app-google-chrome img,
+.taskbar-app-element-fight img,
 .taskbar-app-notepad img {
   width: 80%;
   height: 80%;
@@ -454,21 +455,26 @@
 }
 
 .app-window-drawing,
-.window-body-drawing {
+.window-body-drawing,
+.app-window-element-fight,
+.window-body-element-fight {
   background: #202020;
 }
 
-.window-body-drawing {
+.window-body-drawing,
+.window-body-element-fight {
   overflow: hidden;
 }
 
-.artit-app {
+.artit-app,
+.remote-app {
   position: relative;
   height: 100%;
   background: #202020;
 }
 
-.artit-frame {
+.artit-frame,
+.remote-frame {
   width: 100%;
   height: 100%;
   border: 0;
@@ -476,7 +482,8 @@
   background: #202020;
 }
 
-.artit-loading {
+.artit-loading,
+.remote-loading {
   position: absolute;
   inset: 0;
   display: grid;

@@ -19,6 +19,11 @@
   status = 200
 
 [[redirects]]
+  from = "/ElementFight/*"
+  to = "/.netlify/functions/api/elementfight/:splat"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
