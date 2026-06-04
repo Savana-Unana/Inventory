@@ -365,10 +365,17 @@ function parseBrowserUrl(value) {
 }
 
 function rewriteBrowserAssetUrls(html, pageUrl) {
+  const page = new URL(pageUrl)
+  const appRoot = page.pathname.match(/^\/(?:ArtIt|ElementFight)\//)?.[0] ?? ""
+
   return html.replace(
-    /\b(src|href)=("|')(\/(?:ArtIt|ElementFight)\/[^"']+)/g,
+    /\b(src|href)=("|')(\/(?:(?:ArtIt|ElementFight)\/|src\/)[^"']+)/g,
     (match, attribute, quote, assetPath) => {
-      const assetUrl = new URL(assetPath, pageUrl).href
+      const rootedAssetPath =
+        appRoot && assetPath.startsWith("/src/")
+          ? `${appRoot.slice(0, -1)}${assetPath}`
+          : assetPath
+      const assetUrl = new URL(rootedAssetPath, pageUrl).href
       return `${attribute}=${quote}/api/browser?url=${encodeURIComponent(assetUrl)}`
     },
   )
