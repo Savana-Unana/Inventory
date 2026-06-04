@@ -12,7 +12,7 @@ function ElementFight() {
       )}
       <iframe
         className="remote-frame"
-        src={`/api/browser?url=${encodeURIComponent(ELEMENT_FIGHT_URL)}`}
+        src={ELEMENT_FIGHT_URL}
         title="Element Fight"
         allow="autoplay; fullscreen; gamepad"
         onLoad={() => setReady(true)}

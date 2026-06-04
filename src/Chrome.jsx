@@ -8,31 +8,10 @@ function Chrome({ url = HOME_URL, onClose }) {
   const frameRefs = useRef({})
   const [tabs, setTabs] = useState(() => [makeChromeTab(url)])
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id)
-  const [browserProxyReady, setBrowserProxyReady] = useState(false)
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const historyIndex = activeTab.historyIndex
   const canGoBack = historyIndex > 0
   const canGoForward = activeTab.historyIndex < activeTab.history.length - 1
-
-  useEffect(() => {
-    let cancelled = false
-
-    fetch("/api/browser-check")
-      .then(async (response) => {
-        const data = await response.json().catch(() => null)
-        const hasProxyHeader =
-          response.headers.get("X-Inventory-Browser-Proxy") === "1"
-
-        if (!cancelled) setBrowserProxyReady(Boolean(data?.ok && hasProxyHeader))
-      })
-      .catch(() => {
-        if (!cancelled) setBrowserProxyReady(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     for (const tab of tabs) {
@@ -287,9 +266,8 @@ function Chrome({ url = HOME_URL, onClose }) {
               className={`chrome-frame ${
                 tab.id === activeTab.id ? "chrome-frame-active" : ""
               }`}
-              src={getBrowserFrameUrl(tabUrl, browserProxyReady)}
+              src={getBrowserFrameUrl(tabUrl)}
               title="Google Chrome"
-              sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
               onLoad={() => {
                 frameRefs.current[tab.id]?.contentWindow?.postMessage(
                   { type: "inventory-browser-ready" },
@@ -335,77 +313,11 @@ function useFallbackIcon(event) {
 }
 
 async function resolvePageIcon(url) {
-  try {
-    const response = await fetch(`/api/page-icon?url=${encodeURIComponent(url)}`)
-    if (!response.ok) return resolvePageIconInBrowser(url)
-
-    const data = await response.json()
-    return data.icon || resolvePageIconInBrowser(url)
-  } catch {
-    return resolvePageIconInBrowser(url)
-  }
-}
-
-async function resolvePageIconInBrowser(url) {
-  try {
-    const response = await fetch(url)
-    if (!response.ok) return getFaviconUrl(url)
-
-    const html = await response.text()
-    return findPageIcon(html, response.url) ?? getFaviconUrl(url)
-  } catch {
-    return getFaviconUrl(url)
-  }
+  return getFaviconUrl(url)
 }
 
 async function resolvePageTitle(url) {
-  try {
-    const response = await fetch(`/api/page-title?url=${encodeURIComponent(url)}`)
-    if (!response.ok) return resolvePageTitleInBrowser(url)
-
-    const data = await response.json()
-    return data.title || resolvePageTitleInBrowser(url)
-  } catch {
-    return resolvePageTitleInBrowser(url)
-  }
-}
-
-async function resolvePageTitleInBrowser(url) {
-  try {
-    const response = await fetch(url)
-    if (!response.ok) return null
-
-    const html = await response.text()
-    return findPageTitle(html)
-  } catch {
-    return null
-  }
-}
-
-function findPageIcon(html, pageUrl) {
-  const doc = new DOMParser().parseFromString(html, "text/html")
-  const iconLink =
-    doc.querySelector('link[rel~="icon"]:not([rel~="apple-touch-icon"])') ??
-    doc.querySelector('link[rel="shortcut icon"]') ??
-    doc.querySelector('link[rel~="apple-touch-icon"]')
-
-  if (!iconLink?.href) return null
-
-  try {
-    return new URL(iconLink.getAttribute("href"), pageUrl).href
-  } catch {
-    return null
-  }
-}
-
-function findPageTitle(html) {
-  const title = new DOMParser()
-    .parseFromString(html, "text/html")
-    .querySelector("title")
-    ?.textContent
-    ?.trim()
-
-  return title || null
+  return getChromeTabTitle(url)
 }
 
 function getChromeTabTitle(url) {
@@ -419,14 +331,12 @@ function getChromeTabTitle(url) {
   }
 }
 
-function getBrowserFrameUrl(url, browserProxyReady) {
+function getBrowserFrameUrl(url) {
   try {
     const parsedUrl = new URL(url)
     if (!["http:", "https:"].includes(parsedUrl.protocol)) return url
-    if (parsedUrl.origin === window.location.origin) return url
-    if (!browserProxyReady) return url
 
-    return `/api/browser?url=${encodeURIComponent(url)}`
+    return url
   } catch {
     return url
   }

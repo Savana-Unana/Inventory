@@ -55,7 +55,7 @@ function ArtIt({ onExport, onPickSaveLocation }) {
       <iframe
         ref={frameRef}
         className="artit-frame"
-        src={`/api/browser?url=${encodeURIComponent(ART_IT_URL)}`}
+        src={ART_IT_URL}
         title="Art It!"
         allow="autoplay; fullscreen; gamepad"
         onLoad={notifyReady}

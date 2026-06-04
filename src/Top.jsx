@@ -23,6 +23,8 @@ import elementIcon from "./assets/logos/Element.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
+const LOCAL_ACCOUNTS_KEY = "inventory-local-accounts-v1"
+const LOCAL_SESSION_KEY = "inventory-local-session-v1"
 const ROOT_FOLDER_ID = "user"
 const DESKTOP_FOLDER_ID = "desktop"
 const RECYCLE_BIN_FOLDER_ID = "recycle-bin"
@@ -2245,77 +2247,137 @@ function selectionStyle(box) {
 }
 
 async function loadSession() {
-  const response = await fetch("/api/session")
-  if (response.status === 401) return null
-  return parseApiResponse(response)
+  const session = readLocalSession()
+  if (!session?.accountId) return null
+
+  const account = readLocalAccounts().find((item) => item.id === session.accountId)
+  if (!account) {
+    localStorage.removeItem(LOCAL_SESSION_KEY)
+    return null
+  }
+
+  return makeLocalSessionPayload(account)
 }
 
 async function createAccount(credentials) {
-  return postJson("/api/signup", credentials)
+  const displayName = credentials.displayName.trim()
+  const email = credentials.email.trim().toLowerCase()
+  const password = credentials.password
+
+  if (!displayName) throw new Error("Enter your name.")
+  if (!email) throw new Error("Enter your email.")
+  if (password.length < 6) {
+    throw new Error("Use at least 6 password characters.")
+  }
+
+  const accounts = readLocalAccounts()
+  if (accounts.some((account) => account.email === email)) {
+    throw new Error("That account already exists.")
+  }
+
+  const account = {
+    id: crypto.randomUUID(),
+    displayName,
+    email,
+    passwordHash: await hashLocalPassword(password),
+    createdAt: Date.now(),
+  }
+
+  writeLocalAccounts([...accounts, account])
+  writeLocalSession(account.id)
+  return makeLocalSessionPayload(account)
 }
 
 async function authenticateAccount(credentials) {
-  return postJson("/api/login", credentials)
+  const email = credentials.email.trim().toLowerCase()
+  const passwordHash = await hashLocalPassword(credentials.password)
+  const account = readLocalAccounts().find((item) => item.email === email)
+
+  if (!account) throw new Error("No account found for that email.")
+  if (account.passwordHash !== passwordHash) {
+    throw new Error("The password is incorrect.")
+  }
+
+  writeLocalSession(account.id)
+  return makeLocalSessionPayload(account)
 }
 
 async function logoutAccount() {
-  await fetch("/api/logout", { method: "POST" })
+  localStorage.removeItem(LOCAL_SESSION_KEY)
 }
 
 async function refreshAccountSession() {
-  try {
-    await fetch("/api/touch", { method: "POST" })
-  } catch {
-    // Offline/local API downtime should not interrupt the current desktop.
-  }
+  const session = readLocalSession()
+  if (session?.accountId) writeLocalSession(session.accountId)
 }
 
 async function syncAccountState(accountId, state) {
-  try {
-    await fetch("/api/state", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state),
-    })
-  } catch {
-    savePendingSync(accountId, state)
+  if (state.desktopState) {
+    saveDesktopState(accountId, state.desktopState)
   }
-}
 
-async function postJson(url, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-
-  return parseApiResponse(response)
-}
-
-async function parseApiResponse(response) {
-  const text = await response.text()
-  const data = text ? tryParseJson(text) : {}
-
-  if (!response.ok) {
-    const fallback = text
-      ? `Request failed (${response.status}): ${text.slice(0, 180)}`
-      : `Request failed (${response.status}). Check that Netlify Functions are deployed.`
-
-    throw new Error(
-      data.message ??
-        fallback,
+  if (state.fileStore) {
+    localStorage.setItem(
+      getAccountStorageKey(accountId, FILE_STORE_KEY),
+      JSON.stringify(state.fileStore),
     )
   }
-
-  return data
 }
 
-function tryParseJson(text) {
+function readLocalAccounts() {
   try {
-    return JSON.parse(text)
+    return JSON.parse(localStorage.getItem(LOCAL_ACCOUNTS_KEY)) ?? []
   } catch {
-    return {}
+    return []
   }
+}
+
+function writeLocalAccounts(accounts) {
+  localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accounts))
+}
+
+function readLocalSession() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_SESSION_KEY))
+  } catch {
+    return null
+  }
+}
+
+function writeLocalSession(accountId) {
+  localStorage.setItem(
+    LOCAL_SESSION_KEY,
+    JSON.stringify({ accountId, updatedAt: Date.now() }),
+  )
+}
+
+function makeLocalSessionPayload(account) {
+  return {
+    account: {
+      id: account.id,
+      displayName: account.displayName,
+      email: account.email,
+    },
+    desktopState: loadDesktopState(account.id),
+    fileStore: loadStoredFileStore(account.id),
+  }
+}
+
+function loadStoredFileStore(accountId) {
+  try {
+    return JSON.parse(localStorage.getItem(getAccountStorageKey(accountId, FILE_STORE_KEY)))
+  } catch {
+    return null
+  }
+}
+
+async function hashLocalPassword(password) {
+  const data = new TextEncoder().encode(password)
+  const digest = await crypto.subtle.digest("SHA-256", data)
+
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
 }
 
 function persistServerState(session) {
@@ -2331,13 +2393,6 @@ function persistServerState(session) {
       JSON.stringify(session.fileStore),
     )
   }
-}
-
-function savePendingSync(accountId, state) {
-  localStorage.setItem(
-    getAccountStorageKey(accountId, "pending-sync"),
-    JSON.stringify({ ...state, updatedAt: Date.now() }),
-  )
 }
 
 function getAccountStorageKey(accountId, key) {
