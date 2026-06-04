@@ -98,10 +98,18 @@ async function handleBrowser(event) {
 
   const contentType = response.headers.get("content-type") ?? "text/html"
   if (!contentType.includes("text/html")) {
+    const headers = {
+      "Content-Type": contentType,
+      "X-Inventory-Browser-Proxy": "1",
+    }
+    const cacheControl = response.headers.get("cache-control")
+    if (cacheControl) headers["Cache-Control"] = cacheControl
+
     return {
-      statusCode: 302,
-      headers: { Location: response.url },
-      body: "",
+      statusCode: response.status,
+      headers,
+      body: Buffer.from(await response.arrayBuffer()).toString("base64"),
+      isBase64Encoded: true,
     }
   }
 
@@ -111,7 +119,10 @@ async function handleBrowser(event) {
       "Content-Type": "text/html; charset=utf-8",
       "X-Inventory-Browser-Proxy": "1",
     },
-    body: injectBrowserTracking(await response.text(), response.url),
+    body: injectBrowserTracking(
+      rewriteBrowserAssetUrls(await response.text(), response.url),
+      response.url,
+    ),
   }
 }
 
@@ -574,6 +585,16 @@ function parseBrowserUrl(value) {
   } catch {
     return null
   }
+}
+
+function rewriteBrowserAssetUrls(html, pageUrl) {
+  return html.replace(
+    /\b(src|href)=("|')(\/(?:ArtIt|ElementFight)\/[^"']+)/g,
+    (match, attribute, quote, assetPath) => {
+      const assetUrl = new URL(assetPath, pageUrl).href
+      return `${attribute}=${quote}/api/browser?url=${encodeURIComponent(assetUrl)}`
+    },
+  )
 }
 
 function findPageIcon(html, pageUrl) {

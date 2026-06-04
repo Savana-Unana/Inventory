@@ -15,7 +15,6 @@ function ElementFight() {
         src={`/api/browser?url=${encodeURIComponent(ELEMENT_FIGHT_URL)}`}
         title="Element Fight"
         allow="autoplay; fullscreen; gamepad"
-        sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
         onLoad={() => setReady(true)}
       />
     </div>

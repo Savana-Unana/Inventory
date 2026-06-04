@@ -75,11 +75,18 @@ app.get("/api/browser", async (req, res) => {
     const contentType = response.headers.get("content-type") ?? "text/html"
 
     if (!contentType.includes("text/html")) {
-      res.redirect(response.url)
+      const body = Buffer.from(await response.arrayBuffer())
+      res
+        .status(response.status)
+        .set("Content-Type", contentType)
+        .send(body)
       return
     }
 
-    const html = injectBrowserTracking(await response.text(), response.url)
+    const html = injectBrowserTracking(
+      rewriteBrowserAssetUrls(await response.text(), response.url),
+      response.url,
+    )
     res
       .status(response.status)
       .set("X-Inventory-Browser-Proxy", "1")
@@ -355,6 +362,16 @@ function parseBrowserUrl(value) {
   } catch {
     return null
   }
+}
+
+function rewriteBrowserAssetUrls(html, pageUrl) {
+  return html.replace(
+    /\b(src|href)=("|')(\/(?:ArtIt|ElementFight)\/[^"']+)/g,
+    (match, attribute, quote, assetPath) => {
+      const assetUrl = new URL(assetPath, pageUrl).href
+      return `${attribute}=${quote}/api/browser?url=${encodeURIComponent(assetUrl)}`
+    },
+  )
 }
 
 function findPageIcon(html, pageUrl) {
