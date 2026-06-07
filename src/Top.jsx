@@ -189,6 +189,9 @@ function Desktop({ account, onSignOut }) {
   const [volume, setVolume] = useState(() =>
     clamp(savedDesktopState.volume ?? 1, 0, 1),
   )
+  const [taskbarHoverMode, setTaskbarHoverMode] = useState(
+    () => Boolean(savedDesktopState.taskbarHoverMode),
+  )
   const [homeFolderId, setHomeFolderId] = useState(
     () => savedDesktopState.homeFolderId ?? DESKTOP_FOLDER_ID,
   )
@@ -222,9 +225,10 @@ function Desktop({ account, onSignOut }) {
       pinnedApps,
       taskbarOrder,
       volume,
+      taskbarHoverMode,
       homeFolderId,
     })
-  }, [account.id, background, desktopItems, homeFolderId, lastFrames, pinnedApps, taskbarOrder, volume])
+  }, [account.id, background, desktopItems, homeFolderId, lastFrames, pinnedApps, taskbarHoverMode, taskbarOrder, volume])
 
   useEffect(() => {
     syncAccountState(account.id, {
@@ -236,11 +240,12 @@ function Desktop({ account, onSignOut }) {
         pinnedApps,
         taskbarOrder,
         volume,
+        taskbarHoverMode,
         homeFolderId,
       },
       fileStore,
     })
-  }, [account.id, background, desktopItems, fileStore, homeFolderId, lastFrames, pinnedApps, taskbarOrder, volume])
+  }, [account.id, background, desktopItems, fileStore, homeFolderId, lastFrames, pinnedApps, taskbarHoverMode, taskbarOrder, volume])
 
   useEffect(() => {
     function resizeMaximizedWindows() {
@@ -891,9 +896,11 @@ function Desktop({ account, onSignOut }) {
                 folders={fileStore.folders}
                 background={background}
                 homeFolderId={homeFolderId}
+                taskbarHoverMode={taskbarHoverMode}
                 volume={volume}
                 onBackgroundChange={setBackground}
                 onHomeFolderChange={setHomeFolderId}
+                onTaskbarHoverModeChange={setTaskbarHoverMode}
                 onVolumeChange={setVolume}
               />
             )}
@@ -951,6 +958,7 @@ function Desktop({ account, onSignOut }) {
         onUnpin={unpinTaskbarApp}
         onReorder={moveTaskbarApp}
         onPositionsChange={setTaskbarPositions}
+        taskbarHoverMode={taskbarHoverMode}
         account={account}
         onSignOut={onSignOut}
       />
@@ -1234,6 +1242,7 @@ function Taskbar({
   onUnpin,
   onReorder,
   onPositionsChange,
+  taskbarHoverMode,
   onSignOut,
 }) {
   const iconRefs = useRef({})
@@ -1336,7 +1345,10 @@ function Taskbar({
   }
 
   return (
-    <footer className="taskbar" onPointerMove={updateTaskbarDrag}>
+    <footer
+      className={`taskbar ${taskbarHoverMode ? "taskbar-hover-mode" : ""}`}
+      onPointerMove={updateTaskbarDrag}
+    >
       <div className={`taskbar-apps ${dragState?.hasMoved ? "taskbar-apps-dragging" : ""}`}>
         {visibleApps.map((app) => {
           const openWindows = windows.filter((win) => win.type === app.type)

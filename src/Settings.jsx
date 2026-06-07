@@ -4,9 +4,11 @@ function Settings({
   folders = [],
   background,
   homeFolderId,
+  taskbarHoverMode,
   volume,
   onBackgroundChange,
   onHomeFolderChange,
+  onTaskbarHoverModeChange,
   onVolumeChange,
 }) {
   const imageFiles = files.filter((file) => file.type.startsWith("image/"))
@@ -64,6 +66,20 @@ function Settings({
               onChange={(event) => changeVolume(event.target.value)}
             />
           </div>
+        </section>
+
+        <section className="settings-section">
+          <h2>Taskbar</h2>
+          <label className="settings-check">
+            <input
+              type="checkbox"
+              checked={taskbarHoverMode}
+              onChange={(event) =>
+                onTaskbarHoverModeChange(event.target.checked)
+              }
+            />
+            <span>Taskbar Hover Mode</span>
+          </label>
         </section>
 
         <section className="settings-section">

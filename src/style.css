@@ -209,6 +209,18 @@
   color: white;
   font-family: system-ui, "Segoe UI", sans-serif;
   z-index: 100000;
+  transform: translateY(0);
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+.taskbar-hover-mode {
+  transform: translateY(42px);
+}
+
+.taskbar-hover-mode:hover,
+.taskbar-hover-mode:focus-within {
+  transform: translateY(0);
 }
 
 .taskbar-app {
@@ -940,6 +952,22 @@
   gap: 7px;
   color: #d6d6d6;
   font-size: 15px;
+}
+
+.settings-check {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #d6d6d6;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.settings-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
 }
 
 .settings-row-volume {
