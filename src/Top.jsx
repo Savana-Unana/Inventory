@@ -1710,6 +1710,9 @@ function Window({
     x: window.innerWidth / 2,
     y: window.innerHeight - 28,
   }
+  const appMeta =
+    desktopApps.find((app) => app.type === win.type) ??
+    makeTaskbarAppFromWindow(win)
 
   return (
     <section
@@ -1733,6 +1736,10 @@ function Window({
         onPointerMove={moveDrag}
         onPointerUp={stopAction}
       >
+        <div className="window-title">
+          {appMeta?.logo && <img src={appMeta.logo} alt="" />}
+          <span>{win.title}</span>
+        </div>
         <div className="window-controls">
           <button
             className="window-control-button"
