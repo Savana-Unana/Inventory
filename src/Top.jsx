@@ -9,6 +9,7 @@ import Media from "./Media.jsx"
 import Notepad from "./Notepad.jsx"
 import Photos from "./Photos.jsx"
 import Settings from "./Settings.jsx"
+import YellowStore from "./YellowStore.jsx"
 
 //icons
 import noteIcon from "./assets/logos/Notepad.png"
@@ -20,6 +21,7 @@ import mediaIcon from "./assets/logos/MediaPlayer.png"
 import photosIcon from "./assets/logos/Photos.png"
 import artItIcon from "./assets/logos/ArtIt.png"
 import elementIcon from "./assets/logos/Element.png"
+import yellowStoreIcon from "./assets/logos/YStore.png"
 
 const FILE_STORE_KEY = "inventory-file-explorer-v2"
 const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
@@ -82,6 +84,11 @@ const desktopApps = [
     logo: chromeIcon,
   },
   {
+    type: "yellow-store",
+    title: "The Yellow Store",
+    logo: yellowStoreIcon,
+  },
+  {
     type: "drawing",
     title: "Art It!",
     logo: artItIcon,
@@ -92,6 +99,10 @@ const desktopApps = [
     logo: elementIcon,
   },
 ]
+const FALSE_TASKBAR_APP_TYPES = ["drawing", "yellow-store", "element-fight"]
+const DEFAULT_TASKBAR_APP_TYPES = desktopApps
+  .map((app) => app.type)
+  .filter((type) => !FALSE_TASKBAR_APP_TYPES.includes(type))
 
 export default function App() {
   const [auth, setAuth] = useState({ status: "loading", account: null })
@@ -169,7 +180,7 @@ function Desktop({ account, onSignOut }) {
   const [desktopContextMenu, setDesktopContextMenu] = useState(null)
   const [closeRequests, setCloseRequests] = useState({})
   const [pinnedApps, setPinnedApps] = useState(() => //stores pinned icons
-    savedDesktopState.pinnedApps ?? desktopApps.map((app) => app.type),
+    getInitialPinnedApps(savedDesktopState),
   )
   const [taskbarOrder, setTaskbarOrder] = useState(() => //stores icon order
     savedDesktopState.taskbarOrder ?? desktopApps.map((app) => app.type),
@@ -204,6 +215,7 @@ function Desktop({ account, onSignOut }) {
 
   useEffect(() => {
     saveDesktopState(account.id, {
+      falseAppPinsMigrated: true,
       background,
       desktopItems,
       lastFrames,
@@ -217,6 +229,7 @@ function Desktop({ account, onSignOut }) {
   useEffect(() => {
     syncAccountState(account.id, {
       desktopState: {
+        falseAppPinsMigrated: true,
         background, 
         desktopItems,
         lastFrames,
@@ -797,10 +810,17 @@ function Desktop({ account, onSignOut }) {
   }
 
   function unpinTaskbarApp(type) {
-    const hasOpenWindow = windows.some((win) => win.type === type)
-    if (!hasOpenWindow) return
-
     setPinnedApps((apps) => apps.filter((appType) => appType !== type))
+  }
+
+  function pinTaskbarApp(app) {
+    setPinnedApps((apps) =>
+      apps.includes(app.type) ? apps : [...apps, app.type],
+    )
+    setTaskbarOrder((order) =>
+      order.includes(app.type) ? order : [...order, app.type],
+    )
+    setDesktopContextMenu(null)
   }
 
   function moveTaskbarApp(type, targetType) {
@@ -905,6 +925,9 @@ function Desktop({ account, onSignOut }) {
             {win.type === "google-chrome" && (
               <Chrome onClose={() => requestAnimatedClose(win.id)} />
             )}
+            {win.type === "yellow-store" && (
+              <YellowStore />
+            )}
             {win.type === "drawing" && (
               <ArtIt
                 onExport={saveArtItExport}
@@ -1008,6 +1031,13 @@ function Desktop({ account, onSignOut }) {
             </button>
           ) : (
             <>
+              <button
+                type="button"
+                disabled={pinnedApps.includes(desktopContextMenu.app.type)}
+                onClick={() => pinTaskbarApp(desktopContextMenu.app)}
+              >
+                Add To TaskBar
+              </button>
               <button type="button" disabled>
                 Rename
               </button>
@@ -1404,6 +1434,11 @@ function WindowPreview({ win }) {
         {win.type === "google-chrome" && (
           <div className="preview-chrome">
             https://savana-unana.github.io/UPRO/
+          </div>
+        )}
+        {win.type === "yellow-store" && (
+          <div className="preview-chrome">
+            https://savana-unana.github.io/Mall/
           </div>
         )}
         {win.type === "element-fight" && (
@@ -2039,6 +2074,14 @@ function makeTaskbarAppFromWindow(win) {
     title: win.title,
     logo: fileIcon,
   }
+}
+
+function getInitialPinnedApps(savedDesktopState) {
+  const pinnedApps = savedDesktopState.pinnedApps ?? DEFAULT_TASKBAR_APP_TYPES
+
+  if (savedDesktopState.falseAppPinsMigrated) return pinnedApps
+
+  return pinnedApps.filter((type) => !FALSE_TASKBAR_APP_TYPES.includes(type))
 }
 
 function getFirstWindowFrame() {

@@ -494,6 +494,55 @@
   z-index: 1;
 }
 
+.app-window-yellow-store,
+.window-body-yellow-store {
+  background: #ffd400;
+}
+
+.window-body-yellow-store {
+  overflow: hidden;
+}
+
+.app-window-yellow-store .window-control-button {
+  color: #070b13;
+}
+
+.app-window-yellow-store .close-button:hover {
+  color: white;
+}
+
+.yellow-store-app {
+  position: relative;
+  height: 100%;
+  background: #ffd400;
+}
+
+.yellow-store-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #ffd400;
+}
+
+.yellow-store-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: #ffd400;
+  color: #070b13;
+  font: 700 22px "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.yellow-store-loading span {
+  padding: 14px 18px;
+  border: 4px solid currentColor;
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .window-closing {
   animation: window-close 140ms ease-in forwards;
   pointer-events: none;
