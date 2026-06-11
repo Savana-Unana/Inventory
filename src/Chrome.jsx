@@ -1,18 +1,27 @@
+// Tools from React
 import { useEffect, useRef, useState } from "react"
+
+// Pictures used by the browser
 import reloadIcon from "./assets/logos/Reload.png"
 import chromeIcon from "./assets/logos/GoogleChrome.png"
 
+// Website the browser opens first
 const HOME_URL = "https://savana-unana.github.io/UPRO/"
 
+// Browser app screen
 function Chrome({ url = HOME_URL, onClose }) {
+  // Things the browser needs to remember
   const frameRefs = useRef({})
   const [tabs, setTabs] = useState(() => [makeChromeTab(url)])
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id)
+
+  // Information based on the active tab
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const historyIndex = activeTab.historyIndex
   const canGoBack = historyIndex > 0
   const canGoForward = activeTab.historyIndex < activeTab.history.length - 1
 
+  // Keep tab titles and icons up to date
   useEffect(() => {
     for (const tab of tabs) {
       const currentUrl = tab.history[tab.historyIndex]
@@ -39,6 +48,7 @@ function Chrome({ url = HOME_URL, onClose }) {
     )
   }
 
+  // Listen for messages from the page inside the browser
   useEffect(() => {
     function receiveFrameMessage(event) {
       const sourceTab = tabs.find(
@@ -109,6 +119,7 @@ function Chrome({ url = HOME_URL, onClose }) {
     }
   }, [tabs])
 
+  // What happens when the user navigates
   function goToAddress(event) {
     event.preventDefault()
 
@@ -164,6 +175,7 @@ function Chrome({ url = HOME_URL, onClose }) {
     }))
   }
 
+  // What happens when tabs are opened or closed
   function openNewTab() {
     const tab = makeChromeTab(HOME_URL)
     setTabs((current) => [...current, tab])
@@ -186,6 +198,7 @@ function Chrome({ url = HOME_URL, onClose }) {
     }
   }
 
+  // What appears on the screen
   return (
     <div className="chrome-app">
       <div className="chrome-tabs">
@@ -282,6 +295,7 @@ function Chrome({ url = HOME_URL, onClose }) {
   )
 }
 
+// Make a new browser tab
 function makeChromeTab(url) {
   return {
     id: crypto.randomUUID(),
@@ -296,6 +310,7 @@ function makeChromeTab(url) {
   }
 }
 
+// Small helpers for browser icons
 function getFaviconUrl(url) {
   try {
     const parsedUrl = new URL(url)
@@ -312,6 +327,7 @@ function useFallbackIcon(event) {
   event.currentTarget.src = chromeIcon
 }
 
+// Small helpers for page names and icons
 async function resolvePageIcon(url) {
   return getFaviconUrl(url)
 }
@@ -331,6 +347,7 @@ function getChromeTabTitle(url) {
   }
 }
 
+// Small helpers for web addresses
 function getBrowserFrameUrl(url) {
   try {
     const parsedUrl = new URL(url)
@@ -351,4 +368,5 @@ function normalizeUrl(value) {
   return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`
 }
 
+// Let other files use this screen
 export default Chrome

@@ -1,5 +1,10 @@
+// Tools from React
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+
+// Page styling
 import "./style.css"
+
+// Apps that can open on the desktop
 import ArtIt from "./ArtIt.jsx"
 import Chrome from "./Chrome.jsx"
 import ElementFight from "./ElementFight.jsx"
@@ -9,9 +14,10 @@ import Media from "./Media.jsx"
 import Notepad from "./Notepad.jsx"
 import Photos from "./Photos.jsx"
 import Settings from "./Settings.jsx"
+import Tfillah from "./Tfillah.jsx"
 import YellowStore from "./YellowStore.jsx"
 
-//icons
+// Pictures used for app icons
 import noteIcon from "./assets/logos/Notepad.png"
 import setIcon from "./assets/logos/Settings.png"
 import fileIcon from "./assets/logos/FileExplorer.png"
@@ -21,47 +27,61 @@ import mediaIcon from "./assets/logos/MediaPlayer.png"
 import photosIcon from "./assets/logos/Photos.png"
 import artItIcon from "./assets/logos/ArtIt.png"
 import elementIcon from "./assets/logos/Element.png"
+import tfillahIcon from "./assets/logos/Tfillah.png"
 import yellowStoreIcon from "./assets/logos/YStore.png"
 
-const FILE_STORE_KEY = "inventory-file-explorer-v2"
-const DESKTOP_STATE_KEY = "inventory-desktop-state-v1"
-const LOCAL_ACCOUNTS_KEY = "inventory-local-accounts-v1"
-const LOCAL_SESSION_KEY = "inventory-local-session-v1"
-const ROOT_FOLDER_ID = "user"
-const DESKTOP_FOLDER_ID = "desktop"
-const RECYCLE_BIN_FOLDER_ID = "recycle-bin"
-const REMOVED_DEFAULT_FOLDER_IDS = ["documents", "pictures", "videos"]
-const BASE_DEFAULT_FILE_FOLDERS = [
-  { id: ROOT_FOLDER_ID, name: "User Folder", parentId: null },
-  { id: DESKTOP_FOLDER_ID, name: "Desktop", parentId: ROOT_FOLDER_ID },
-  { id: "downloads", name: "Downloads", parentId: ROOT_FOLDER_ID },
-  { id: RECYCLE_BIN_FOLDER_ID, name: "Recycling Bin", parentId: ROOT_FOLDER_ID },
+// Names used to save desktop information
+const File_Key = "inv-file-explorer"
+const Desktop_Key = "inv-top"
+const Account_Key = "inv-accts"
+const Session_Key = "inv-session"
+const Root = "inv-root"
+const Desktop = "inv-desktop"
+const Recycle_Bin = "inv-bin"
+const Hidden_Folders = ["documents", "pictures", "videos"]
+
+// Folders every account starts with
+const Auto_Folders = [
+  { id: Root, name: "User Folder", parentId: null },
+  { id: Desktop, name: "Desktop", parentId: Root },
+  { id: "downloads", name: "Downloads", parentId: Root },
+  { id: Recycle_Bin, name: "Recycling Bin", parentId: Root },
 ]
 
-const backgroundAssets = import.meta.glob("./assets/backgrounds/*.{png,jpg,jpeg}", {
-  eager: true,
-  import: "default",
-})
+// Desktop background pictures
+const backgroundAssets = {
+  ...import.meta.glob("./assets/backgrounds/*.png", { eager: true, import: "default" }),
+  ...import.meta.glob("./assets/backgrounds/*.jpg", { eager: true, import: "default" }),
+  ...import.meta.glob("./assets/backgrounds/*.jpeg", { eager: true, import: "default" }),
+}
+
 const backgrounds = Object.entries(backgroundAssets).map(([path, url]) => ({
   id: path,
   name: cleanAssetName(path),
   url,
 }))
-const logoAssets = import.meta.glob("./assets/logos/*.{png,jpg,jpeg}", {
-  eager: true,
-  import: "default",
-})
-const sfxAssets = import.meta.glob("./sfx/*.{mp3,wav,ogg}", {
-  eager: true,
-  import: "default",
-})
+
+// Extra icon pictures
+const logoAssets = {
+  ...import.meta.glob("./assets/logos/*.png", { eager: true, import: "default" }),
+  ...import.meta.glob("./assets/logos/*.jpg", { eager: true, import: "default" }),
+  ...import.meta.glob("./assets/logos/*.jpeg", { eager: true, import: "default" }),
+}
+
+// Sounds used by the desktop
+const sfxAssets = {
+  ...import.meta.glob("./sfx/*.mp3", { eager: true, import: "default" }),
+  ...import.meta.glob("./sfx/*.wav", { eager: true, import: "default" }),
+  ...import.meta.glob("./sfx/*.ogg", { eager: true, import: "default" }),
+}
+
 const recycleBinIcon = logoAssets["./assets/logos/RecycleBin.png"] ?? fileIcon
 const recycleBinEmptyIcon =
   logoAssets["./assets/logos/RecycleBinEmpty.png"] ?? recycleBinIcon
 const alert = sfxAssets["./sfx/alert.mp3"]
 const recycledSound = sfxAssets["./sfx/Recycled.mp3"]
 
-//all my apps
+// Apps shown on the desktop
 const desktopApps = [
   {
     type: "notepad",
@@ -84,29 +104,37 @@ const desktopApps = [
     logo: chromeIcon,
   },
   {
-    type: "yellow-store",
+    type: "yellow-store", //https://savana-unana.github.io/Mall/
     title: "The Yellow Store",
     logo: yellowStoreIcon,
   },
   {
-    type: "drawing",
+    type: "drawing", //https://savana-unana.github.io/ArtIt/
     title: "Art It!",
     logo: artItIcon,
   },
   {
-    type: "element-fight",
+    type: "element-fight", //https://savana-unana.github.io/ElementFight/
     title: "Element Fight",
     logo: elementIcon,
   },
+  {
+    type: "tfillah", //https://savana-unana.github.io/Tfillah/
+    title: "Tfillah",
+    logo: tfillahIcon,
+  },
 ]
-const FALSE_TASKBAR_APP_TYPES = ["drawing", "yellow-store", "element-fight"]
-const DEFAULT_TASKBAR_APP_TYPES = desktopApps
+const Hidden_Task_Apps = ["drawing", "yellow-store", "element-fight", "tfillah"]
+const Auto_Task_Apps = desktopApps
   .map((app) => app.type)
-  .filter((type) => !FALSE_TASKBAR_APP_TYPES.includes(type))
+  .filter((type) => !Hidden_Task_Apps.includes(type))
 
+// Main app that decides whether to show login or desktop
 export default function App() {
+  // Remember whether someone is signed in
   const [auth, setAuth] = useState({ status: "loading", account: null })
 
+  // Check for a saved sign-in when the app starts
   useEffect(() => {
     let cancelled = false
 
@@ -129,6 +157,7 @@ export default function App() {
     }
   }, [])
 
+  // What happens when the user signs in or out
   function startSession(session) {
     persistServerState(session)
     setAuth({ status: "signed-in", account: session.account })
@@ -139,8 +168,9 @@ export default function App() {
     setAuth({ status: "signed-out", account: null })
   }
 
+  // What appears on the screen
   if (auth.status === "loading") {
-    return <main className="login-screen" />
+    return <main className="login-screen"/>
   }
 
   if (!auth?.account) {
@@ -154,7 +184,7 @@ export default function App() {
   }
 
   return (
-    <Desktop
+    <DesktopShell
       key={auth.account.id}
       account={auth.account}
       onSignOut={endSession}
@@ -162,12 +192,15 @@ export default function App() {
   )
 }
 
-//The Storer and Creator of Data
-function Desktop({ account, onSignOut }) {
-  const fileStoreKey = getAccountStorageKey(account.id, FILE_STORE_KEY)
+// Desktop screen
+function DesktopShell({ account, onSignOut }) {
+  // Save locations for this account
+  const fileStoreKey = getAccountStorageKey(account.id, File_Key)
   const fileStoreChangeEvent = `file-store-change:${account.id}`
   const rootFolderName = account.displayName || "User Folder"
   const savedDesktopState = loadDesktopState(account.id)
+
+  // Things the desktop needs to remember
   const [windows, setWindows] = useState([]) //stores open windows
   const [lastFrames, setLastFrames] = useState(
     () => savedDesktopState.lastFrames ?? {},
@@ -193,7 +226,7 @@ function Desktop({ account, onSignOut }) {
     () => Boolean(savedDesktopState.taskbarHoverMode),
   )
   const [homeFolderId, setHomeFolderId] = useState(
-    () => savedDesktopState.homeFolderId ?? DESKTOP_FOLDER_ID,
+    () => savedDesktopState.homeFolderId ?? Desktop,
   )
   const [background, setBackground] = useState(
     () => savedDesktopState.background ?? pickRandom(backgrounds).url,
@@ -207,6 +240,7 @@ function Desktop({ account, onSignOut }) {
   const [selectedIcons, setSelectedIcons] = useState([]) //store selected icons
   const lastSessionTouch = useRef(0)
 
+  // Save desktop changes and watch for browser changes
   useEffect(() => {
     function reloadStore() {
       setFileStore(loadFileStore(fileStoreKey, rootFolderName))
@@ -298,12 +332,13 @@ function Desktop({ account, onSignOut }) {
     }
   }, [])
 
+  // What happens when an app or file opens a window
   function openWindow(app) {
     const windowType = app.windowType ?? app.type
     const frame = lastFrames[windowType] ?? getFirstWindowFrame()
     const maximizedFrame = getMaximizedFrame()
 
-    //Creates a new window with all the prior info given
+    // Create a new window using the saved size and app information.
     setWindows((wins) => [
       ...wins,
       {
@@ -335,12 +370,12 @@ function Desktop({ account, onSignOut }) {
     const files = [...e.dataTransfer.files]
     const droppedImages = getDroppedUrls(e.dataTransfer)
       .filter(isImageUrl)
-      .map((url) => makeUrlFile(url, DESKTOP_FOLDER_ID))
+      .map((url) => makeUrlFile(url, Desktop))
 
     if (!files.length && !droppedImages.length) return
 
     const existingNames = fileStore.files
-      .filter((file) => file.folderId === DESKTOP_FOLDER_ID)
+      .filter((file) => file.folderId === Desktop)
       .map((file) => file.name)
 
     const nextFiles = await Promise.all(
@@ -353,7 +388,7 @@ function Desktop({ account, onSignOut }) {
           name,
           type: file.type || "application/octet-stream",
           size: file.size,
-          folderId: DESKTOP_FOLDER_ID,
+          folderId: Desktop,
           addedAt: Date.now(),
           text: file.type.startsWith("text/") ? await file.text() : "",
           dataUrl: await readStoredFileData(file),
@@ -382,6 +417,7 @@ function Desktop({ account, onSignOut }) {
     window.dispatchEvent(new Event(fileStoreChangeEvent))
   }
 
+  // What happens when a file opens
   function openFile(file) {
     if (file.type.startsWith("image/")) {
       if (focusOpenFileWindow(file, "photos")) return
@@ -434,6 +470,7 @@ function Desktop({ account, onSignOut }) {
     return true
   }
 
+  // What happens when windows move, close, minimize, or maximize
   function closeWindow(id) {
     setWindows((wins) => {
       const closing = wins.find((win) => win.id === id)
@@ -505,6 +542,7 @@ function Desktop({ account, onSignOut }) {
     focusWindow(id)
   }
 
+  // What happens when desktop icons move or get deleted
   function moveDesktopItems(types, colChange, rowChange) {
     setDesktopItems((items) =>
       canMoveItems(items, types, colChange, rowChange)
@@ -543,7 +581,7 @@ function Desktop({ account, onSignOut }) {
           file.id === item.fileId
             ? {
                 ...file,
-                folderId: RECYCLE_BIN_FOLDER_ID,
+                folderId: Recycle_Bin,
                 originalFolderId: file.folderId,
                 deletedAt: Date.now(),
               }
@@ -563,7 +601,7 @@ function Desktop({ account, onSignOut }) {
           folder.id === item.folderId
             ? {
                 ...folder,
-                parentId: RECYCLE_BIN_FOLDER_ID,
+                parentId: Recycle_Bin,
                 originalParentId: folder.parentId,
                 deletedAt: Date.now(),
               }
@@ -599,7 +637,7 @@ function Desktop({ account, onSignOut }) {
         fileIds.includes(file.id)
           ? {
               ...file,
-              folderId: RECYCLE_BIN_FOLDER_ID,
+              folderId: Recycle_Bin,
               originalFolderId: file.folderId,
               deletedAt: Date.now(),
             }
@@ -609,7 +647,7 @@ function Desktop({ account, onSignOut }) {
         folderIds.includes(folder.id)
           ? {
               ...folder,
-              parentId: RECYCLE_BIN_FOLDER_ID,
+              parentId: Recycle_Bin,
               originalParentId: folder.parentId,
               deletedAt: Date.now(),
             }
@@ -632,7 +670,7 @@ function Desktop({ account, onSignOut }) {
       ...store,
       files: store.files.filter(
         (file) =>
-          file.folderId !== RECYCLE_BIN_FOLDER_ID &&
+          file.folderId !== Recycle_Bin &&
           !recycleFolderIds.includes(file.folderId),
       ),
       folders: store.folders.filter(
@@ -647,6 +685,7 @@ function Desktop({ account, onSignOut }) {
     setDesktopContextMenu(null)
   }
 
+  // What happens when notes and drawings are saved or opened
   function updateWindowData(id, data) {
     setWindows((wins) =>
       wins.map((win) =>
@@ -662,7 +701,7 @@ function Desktop({ account, onSignOut }) {
     setSaveDialog({
       windowId: id,
       name: win.title.endsWith(".txt") ? win.title.slice(0, -4) : win.title,
-      folderId: win.data.folderId ?? DESKTOP_FOLDER_ID,
+      folderId: win.data.folderId ?? Desktop,
       targetFileId: win.data.fileId ?? "",
     })
   }
@@ -775,7 +814,7 @@ function Desktop({ account, onSignOut }) {
       kind: "image",
       title: "Save image",
       name: getFileStem(normalizePngFileName(name)),
-      folderId: DESKTOP_FOLDER_ID,
+      folderId: Desktop,
       targetFileId: "",
       fileType: "image",
       showName: false,
@@ -790,7 +829,7 @@ function Desktop({ account, onSignOut }) {
       kind: "image-location",
       title: "Choose export folder",
       name: getFileStem(normalizePngFileName(name)),
-      folderId: DESKTOP_FOLDER_ID,
+      folderId: Desktop,
       targetFileId: "",
       fileType: "image",
       showName: false,
@@ -866,7 +905,6 @@ function Desktop({ account, onSignOut }) {
         onDropFiles={dropDesktopFiles}
       />
 
-      {/* windows.map turns each saved window object into an actual window on screen. */}
       {windows.map((win) => (
         !win.minimized && (
           <Window
@@ -943,6 +981,9 @@ function Desktop({ account, onSignOut }) {
             )}
             {win.type === "element-fight" && (
               <ElementFight />
+            )}
+            {win.type === "tfillah" && (
+              <Tfillah />
             )}
           </Window>
         )
@@ -1060,6 +1101,7 @@ function Desktop({ account, onSignOut }) {
   )
 }
 
+// Desktop icon area
 function DesktopGrid({
   apps,
   selectedIcons,
@@ -1069,9 +1111,11 @@ function DesktopGrid({
   onOpenMenu,
   onDropFiles,
 }) {
+  // Remember icon selection and dragging
   const [selectBox, setSelectBox] = useState(null)
   const [dragMove, setDragMove] = useState(null)
 
+  // What happens when icons are selected
   function startDesktopSelection(e) {
     if (e.target !== e.currentTarget) return
 
@@ -1122,6 +1166,7 @@ function DesktopGrid({
     setSelectBox(null)
   }
 
+  // What happens when icons are dragged
   function startIconDrag(app, e) {
     const selected = e.ctrlKey || e.metaKey
       ? toggleSelected(selectedIcons, app.type)
@@ -1166,6 +1211,7 @@ function DesktopGrid({
     setDragMove(null)
   }
 
+  // What appears on the screen
   return (
     <div
       className="desktop-grid"
@@ -1175,7 +1221,6 @@ function DesktopGrid({
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDropFiles}
     >
-      {/* Each app object becomes one desktop icon, in array order. */}
       {apps.map((app) => (
         <div
           key={app.type}
@@ -1231,6 +1276,7 @@ function DesktopGrid({
   )
 }
 
+// Bottom taskbar
 function Taskbar({
   account,
   apps,
@@ -1245,11 +1291,13 @@ function Taskbar({
   taskbarHoverMode,
   onSignOut,
 }) {
+  // Remember taskbar dragging
   const iconRefs = useRef({})
   const suppressClickRef = useRef(false)
   const [dragState, setDragState] = useState(null)
   const draggedType = dragState?.type ?? null
 
+  // Decide which apps should be shown on the taskbar
   const openTypes = [...new Set(windows.map((win) => win.type))]
   const visibleTypes = [
     ...taskbarOrder.filter(
@@ -1266,6 +1314,7 @@ function Taskbar({
     .filter(Boolean)
   const visibleTypesKey = visibleTypes.join("|")
 
+  // Track where taskbar icons are for minimize animations
   useLayoutEffect(() => {
     const nextPositions = {}
 
@@ -1282,6 +1331,7 @@ function Taskbar({
     onPositionsChange(nextPositions)
   }, [visibleTypesKey, windows.length, onPositionsChange])
 
+  // What happens when a taskbar app is clicked
   function clickTaskbarApp(app, openWindows) {
     if (openWindows.length === 0) {
       onOpen(app)
@@ -1292,10 +1342,11 @@ function Taskbar({
       win.zIndex > highest.zIndex ? win : highest,
     )
 
-    // focusWindow also restores a minimized window.
+    // Clicking an open app also brings back a minimized window.
     onFocusWindow(topWindow.id)
   }
 
+  // What happens when taskbar icons are dragged
   function startTaskbarDrag(type, e) {
     if (e.button !== 0) return
 
@@ -1344,6 +1395,7 @@ function Taskbar({
     setDragState(null)
   }
 
+  // What appears on the screen
   return (
     <footer
       className={`taskbar ${taskbarHoverMode ? "taskbar-hover-mode" : ""}`}
@@ -1432,6 +1484,7 @@ function Taskbar({
   )
 }
 
+// Small previews above taskbar icons
 function WindowPreview({ win }) {
   return (
     <div className="preview-screen">
@@ -1458,11 +1511,17 @@ function WindowPreview({ win }) {
             https://savana-unana.github.io/ElementFight/
           </div>
         )}
+        {win.type === "tfillah" && (
+          <div className="preview-chrome">
+            https://savana-unana.github.io/Tfillah/
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
+// Save pop-up window
 function SaveDialog({
   folders,
   files,
@@ -1479,19 +1538,22 @@ function SaveDialog({
   onSave,
   onIgnore,
 }) {
+  // Files and folders that can be chosen here
   const saveFolders = folders.filter(
-    (folder) => folder.id !== RECYCLE_BIN_FOLDER_ID,
+    (folder) => folder.id !== Recycle_Bin,
   )
   const replaceFiles = files.filter((file) =>
     fileType === "image" ? isImageFile(file) : isTextFile(file),
   )
 
+  // What happens when Save is pressed
   function submitSave(e) {
     e.preventDefault()
     if (!name.trim()) return
     onSave()
   }
 
+  // What appears on the screen
   return (
     <div className="save-overlay" onPointerDown={onIgnore}>
       <form
@@ -1545,16 +1607,20 @@ function SaveDialog({
   )
 }
 
+// Open note pop-up window
 function OpenTextDialog({ files, folders, onOpen, onClose }) {
+  // Remember which note is selected
   const textFiles = files.filter((file) => isTextFile(file))
   const [selectedFileId, setSelectedFileId] = useState(textFiles[0]?.id ?? "")
 
+  // What happens when Open is pressed
   function submitOpen(e) {
     e.preventDefault()
     if (!selectedFileId) return
     onOpen(selectedFileId)
   }
 
+  // What appears on the screen
   return (
     <div className="save-overlay" onPointerDown={onClose}>
       <form
@@ -1593,14 +1659,18 @@ function OpenTextDialog({ files, folders, onOpen, onClose }) {
   )
 }
 
+// Clock in the taskbar
 function TaskbarClock() {
+  // Remember the current time
   const [now, setNow] = useState(new Date())
 
+  // Update the clock once per second
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
+  // What appears on the screen
   return (
     <div className="taskbar-clock">
       <span>
@@ -1611,7 +1681,7 @@ function TaskbarClock() {
   )
 }
 
-//window rendering
+// App window frame
 function Window({
   win,
   children,
@@ -1623,16 +1693,18 @@ function Window({
   onToggleMaximize,
   minimizeTarget,
 }) {
-  // action remembers whether the mouse is currently dragging or resizing.
+  // Remember if the user is moving or resizing this window
   const [action, setAction] = useState(null)
   const [visualState, setVisualState] = useState("open")
 
+  // Finish the close animation before removing the window
   useEffect(() => {
     if (!closeRequest) return
     const timer = setTimeout(() => onClose(win.id), 150)
     return () => clearTimeout(timer)
   }, [closeRequest, onClose, win.id])
 
+  // What happens when the window is dragged
   function startDrag(e) {
     if (win.maximized) return
 
@@ -1664,6 +1736,7 @@ function Window({
     resizeWindow(action.edge, action.startFrame, dx, dy)
   }
 
+  // What happens when the window is resized
   function startResize(edge, e) {
     if (win.maximized) return
 
@@ -1704,10 +1777,12 @@ function Window({
     onFrameChange(win.id, next)
   }
 
+  // What happens when the mouse button is released
   function stopAction() {
     setAction(null)
   }
 
+  // What happens when minimize or close animations start
   function animateMinimize() {
     setVisualState("minimizing")
     setTimeout(() => onMinimize(win.id), 180)
@@ -1726,6 +1801,7 @@ function Window({
     desktopApps.find((app) => app.type === win.type) ??
     makeTaskbarAppFromWindow(win)
 
+  // What appears on the screen
   return (
     <section
       className={`window app-window-${win.type} window-${
@@ -1807,11 +1883,13 @@ function Window({
   )
 }
 
+// Small helpers for window information
 function getStartingWindowData(type) {
   if (type === "notepad") return { text: "" }
   return {}
 }
 
+// Small helpers for notes
 function getNotepadDocumentName(win) {
   return win.data.fileId ? win.title : "Untitled Document"
 }
@@ -1821,7 +1899,7 @@ function saveTextFile(
   title,
   text,
   folderId,
-  storageKey = FILE_STORE_KEY,
+  storageKey = File_Key,
   rootFolderName = "User Folder",
   targetFileId = "",
 ) {
@@ -1851,12 +1929,13 @@ function saveTextFile(
   return savedFile
 }
 
+// Small helpers for saved pictures
 function saveImageFile(
   title,
   type,
   dataUrl,
   folderId,
-  storageKey = FILE_STORE_KEY,
+  storageKey = File_Key,
   rootFolderName = "User Folder",
   targetFileId = "",
 ) {
@@ -1884,6 +1963,7 @@ function saveImageFile(
   return savedFile
 }
 
+// Small helpers for file names
 function getUniqueFileName(name, existingNames) {
   if (!existingNames.includes(name)) return name
 
@@ -1921,13 +2001,15 @@ function getDataUrlSize(dataUrl) {
   return Math.round((base64.length * 3) / 4)
 }
 
+// Small helpers for selected icons
 function toggleSelected(items, item) {
   return items.includes(item)
     ? items.filter((current) => current !== item)
     : [...items, item]
 }
 
-function loadFileStore(storageKey = FILE_STORE_KEY, rootFolderName = "User Folder") {
+// Small helpers for loading saved files and folders
+function loadFileStore(storageKey = File_Key, rootFolderName = "User Folder") {
   const defaultFolders = getDefaultFileFolders(rootFolderName)
 
   try {
@@ -1936,12 +2018,12 @@ function loadFileStore(storageKey = FILE_STORE_KEY, rootFolderName = "User Folde
 
     const savedFolders = saved.folders ?? []
     const folders = savedFolders
-      .filter((folder) => !REMOVED_DEFAULT_FOLDER_IDS.includes(folder.id))
+      .filter((folder) => !Hidden_Folders.includes(folder.id))
       .map((folder) => ({
         ...folder,
-        name: folder.id === ROOT_FOLDER_ID ? rootFolderName : folder.name,
+        name: folder.id === Root ? rootFolderName : folder.name,
         parentId:
-          folder.parentId ?? (folder.id === ROOT_FOLDER_ID ? null : ROOT_FOLDER_ID),
+          folder.parentId ?? (folder.id === Root ? null : Root),
       }))
     const missingDefaults = defaultFolders.filter(
       (folder) => !folders.some((savedFolder) => savedFolder.id === folder.id),
@@ -1950,7 +2032,7 @@ function loadFileStore(storageKey = FILE_STORE_KEY, rootFolderName = "User Folde
     return {
       folders: [...missingDefaults, ...folders],
       files: (saved.files ?? []).filter(
-        (file) => !REMOVED_DEFAULT_FOLDER_IDS.includes(file.folderId),
+        (file) => !Hidden_Folders.includes(file.folderId),
       ),
     }
   } catch {
@@ -1959,11 +2041,12 @@ function loadFileStore(storageKey = FILE_STORE_KEY, rootFolderName = "User Folde
 }
 
 function getDefaultFileFolders(rootFolderName) {
-  return BASE_DEFAULT_FILE_FOLDERS.map((folder) =>
-    folder.id === ROOT_FOLDER_ID ? { ...folder, name: rootFolderName } : folder,
+  return Auto_Folders.map((folder) =>
+    folder.id === Root ? { ...folder, name: rootFolderName } : folder,
   )
 }
 
+// Small helpers for desktop icons
 function getDesktopItems(store) {
   const binHasFiles = isRecycleBinFull(store)
 
@@ -1973,11 +2056,11 @@ function getDesktopItems(store) {
       windowType: "file-explorer",
       title: "Recycle Bin",
       logo: binHasFiles ? recycleBinIcon : recycleBinEmptyIcon,
-      data: { initialFolder: RECYCLE_BIN_FOLDER_ID },
+      data: { initialFolder: Recycle_Bin },
     },
     ...desktopApps,
     ...store.folders
-      .filter((folder) => folder.parentId === DESKTOP_FOLDER_ID)
+      .filter((folder) => folder.parentId === Desktop)
       .map((folder) => ({
         type: `folder:${folder.id}`,
         desktopKind: "folder",
@@ -1988,7 +2071,7 @@ function getDesktopItems(store) {
         data: { initialFolder: folder.id },
       })),
     ...store.files
-      .filter((file) => file.folderId === DESKTOP_FOLDER_ID)
+      .filter((file) => file.folderId === Desktop)
       .map((file) => ({
         type: `file:${file.id}`,
         desktopKind: "file",
@@ -2010,13 +2093,15 @@ function cleanDesktopFileName(name) {
   return name.replace(/\.[^/.]+$/, "")
 }
 
+// Small helpers for the Recycling Bin
 function isRecycleBinFull(store) {
   return (
-    store.files.some((file) => file.folderId === RECYCLE_BIN_FOLDER_ID) ||
-    store.folders.some((folder) => folder.parentId === RECYCLE_BIN_FOLDER_ID)
+    store.files.some((file) => file.folderId === Recycle_Bin) ||
+    store.folders.some((folder) => folder.parentId === Recycle_Bin)
   )
 }
 
+// Small helpers for placing icons on the desktop
 function placeDesktopApps(apps, oldItems) {
   const usedTiles = new Set()
 
@@ -2053,10 +2138,11 @@ function findOpenDesktopTile(usedTiles) {
   return { col: 1, row: 1 }
 }
 
+// Small helpers for folders
 function getRecycleFolderTreeIds(folders) {
   const ids = []
   const pending = folders
-    .filter((folder) => folder.parentId === RECYCLE_BIN_FOLDER_ID)
+    .filter((folder) => folder.parentId === Recycle_Bin)
     .map((folder) => folder.id)
 
   while (pending.length > 0) {
@@ -2085,6 +2171,7 @@ function folderPath(folders, currentFolder) {
   return names.join(" › ")
 }
 
+// Small helpers for taskbar apps
 function makeTaskbarAppFromWindow(win) {
   if (!win) return null
 
@@ -2096,13 +2183,14 @@ function makeTaskbarAppFromWindow(win) {
 }
 
 function getInitialPinnedApps(savedDesktopState) {
-  const pinnedApps = savedDesktopState.pinnedApps ?? DEFAULT_TASKBAR_APP_TYPES
+  const pinnedApps = savedDesktopState.pinnedApps ?? Auto_Task_Apps
 
   if (savedDesktopState.falseAppPinsMigrated) return pinnedApps
 
-  return pinnedApps.filter((type) => !FALSE_TASKBAR_APP_TYPES.includes(type))
+  return pinnedApps.filter((type) => !Hidden_Task_Apps.includes(type))
 }
 
+// Small helpers for window sizes and positions
 function getFirstWindowFrame() {
   return {
     x: Math.round(window.innerWidth * 0.04),
@@ -2130,6 +2218,7 @@ function getWindowFrame(win) {
   }
 }
 
+// Small helpers for pictures and sounds
 function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)]
 }
@@ -2150,6 +2239,7 @@ function cleanAssetName(path) {
     .replace(/[-_]+/g, " ")
 }
 
+// Small helpers for screen positions
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
@@ -2167,6 +2257,7 @@ function boxesTouch(a, b) {
   return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top
 }
 
+// Small helpers for knowing what kind of file this is
 function isMediaFile(file) {
   return (
     file.type.startsWith("video/") ||
@@ -2183,6 +2274,7 @@ function isImageFile(file) {
   return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i.test(file.name)
 }
 
+// Small helpers for images dragged in from websites
 function getDroppedUrls(dataTransfer) {
   const uriList = dataTransfer.getData("text/uri-list")
   const plainText = dataTransfer.getData("text/plain")
@@ -2241,6 +2333,7 @@ function getImageTypeFromName(name) {
   return "image/png"
 }
 
+// Small helpers for reading uploaded files
 function readFile(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
@@ -2297,6 +2390,7 @@ function compressImageFile(file) {
   })
 }
 
+// Small helpers for the drag-selection box
 function selectionStyle(box) {
   const next = makeBox(box)
 
@@ -2308,13 +2402,14 @@ function selectionStyle(box) {
   }
 }
 
+// Small helpers for signing in and staying signed in
 async function loadSession() {
   const session = readLocalSession()
   if (!session?.accountId) return null
 
   const account = readLocalAccounts().find((item) => item.id === session.accountId)
   if (!account) {
-    localStorage.removeItem(LOCAL_SESSION_KEY)
+    localStorage.removeItem(Session_Key)
     return null
   }
 
@@ -2365,7 +2460,7 @@ async function authenticateAccount(credentials) {
 }
 
 async function logoutAccount() {
-  localStorage.removeItem(LOCAL_SESSION_KEY)
+  localStorage.removeItem(Session_Key)
 }
 
 async function refreshAccountSession() {
@@ -2380,27 +2475,28 @@ async function syncAccountState(accountId, state) {
 
   if (state.fileStore) {
     localStorage.setItem(
-      getAccountStorageKey(accountId, FILE_STORE_KEY),
+      getAccountStorageKey(accountId, File_Key),
       JSON.stringify(state.fileStore),
     )
   }
 }
 
+// Small helpers for saved accounts
 function readLocalAccounts() {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_ACCOUNTS_KEY)) ?? []
+    return JSON.parse(localStorage.getItem(Account_Key)) ?? []
   } catch {
     return []
   }
 }
 
 function writeLocalAccounts(accounts) {
-  localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accounts))
+  localStorage.setItem(Account_Key, JSON.stringify(accounts))
 }
 
 function readLocalSession() {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_SESSION_KEY))
+    return JSON.parse(localStorage.getItem(Session_Key))
   } catch {
     return null
   }
@@ -2408,7 +2504,7 @@ function readLocalSession() {
 
 function writeLocalSession(accountId) {
   localStorage.setItem(
-    LOCAL_SESSION_KEY,
+    Session_Key,
     JSON.stringify({ accountId, updatedAt: Date.now() }),
   )
 }
@@ -2427,12 +2523,13 @@ function makeLocalSessionPayload(account) {
 
 function loadStoredFileStore(accountId) {
   try {
-    return JSON.parse(localStorage.getItem(getAccountStorageKey(accountId, FILE_STORE_KEY)))
+    return JSON.parse(localStorage.getItem(getAccountStorageKey(accountId, File_Key)))
   } catch {
     return null
   }
 }
 
+// Small helpers for passwords
 async function hashLocalPassword(password) {
   const data = new TextEncoder().encode(password)
   const digest = await crypto.subtle.digest("SHA-256", data)
@@ -2442,6 +2539,7 @@ async function hashLocalPassword(password) {
     .join("")
 }
 
+// Small helpers for saving account data
 function persistServerState(session) {
   if (!session?.account) return
 
@@ -2451,7 +2549,7 @@ function persistServerState(session) {
 
   if (session.fileStore) {
     localStorage.setItem(
-      getAccountStorageKey(session.account.id, FILE_STORE_KEY),
+      getAccountStorageKey(session.account.id, File_Key),
       JSON.stringify(session.fileStore),
     )
   }
@@ -2464,7 +2562,7 @@ function getAccountStorageKey(accountId, key) {
 function loadDesktopState(accountId) {
   try {
     return (
-      JSON.parse(localStorage.getItem(getAccountStorageKey(accountId, DESKTOP_STATE_KEY))) ??
+      JSON.parse(localStorage.getItem(getAccountStorageKey(accountId, Desktop_Key))) ??
       {}
     )
   } catch {
@@ -2474,11 +2572,12 @@ function loadDesktopState(accountId) {
 
 function saveDesktopState(accountId, state) {
   localStorage.setItem(
-    getAccountStorageKey(accountId, DESKTOP_STATE_KEY),
+    getAccountStorageKey(accountId, Desktop_Key),
     JSON.stringify(state),
   )
 }
 
+// Small helpers for names shown on screen
 function getInitials(name) {
   return name
     .trim()
@@ -2488,6 +2587,7 @@ function getInitials(name) {
     .join("") || "U"
 }
 
+// Small helpers for moving desktop icons
 function canMoveItems(items, types, colChange, rowChange) {
   const movingItems = items.filter((item) => types.includes(item.type))
   const stillItems = items.filter((item) => !types.includes(item.type))

@@ -1,3 +1,4 @@
+// Settings screen
 function Settings({
   backgrounds = [],
   files = [],
@@ -11,6 +12,7 @@ function Settings({
   onTaskbarHoverModeChange,
   onVolumeChange,
 }) {
+  // Choices made from the current settings
   const imageFiles = files.filter((file) => file.type.startsWith("image/"))
   const selectedBackground = getSelectedBackground(
     background,
@@ -18,6 +20,7 @@ function Settings({
     imageFiles,
   )
 
+  // What happens when a setting changes
   function changeVolume(value) {
     const nextVolume = Math.max(0, Math.min(100, Number(value) || 0)) / 100
     onVolumeChange(nextVolume)
@@ -39,6 +42,7 @@ function Settings({
     if (fallback) onBackgroundChange(fallback.url)
   }
 
+  // What appears on the screen
   return (
     <div className="settings-app">
       <header className="settings-header">Settings</header>
@@ -138,6 +142,7 @@ function Settings({
   )
 }
 
+// Small helpers for choosing the selected background
 function getSelectedBackground(background, backgrounds, imageFiles) {
   return (
     backgrounds.find((item) => item.url === background)?.id ??
@@ -146,6 +151,7 @@ function getSelectedBackground(background, backgrounds, imageFiles) {
   )
 }
 
+// Small helpers for showing folder names
 function folderPath(folders, currentFolder) {
   const names = []
   let folder = folders.find((item) => item.id === currentFolder)
@@ -158,4 +164,5 @@ function folderPath(folders, currentFolder) {
   return names.join(" > ")
 }
 
+// Let other files use this screen
 export default Settings

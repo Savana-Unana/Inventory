@@ -1,3 +1,4 @@
+// Notepad screen
 function Notepad({
   documentName = "Untitled Document",
   text,
@@ -5,9 +6,11 @@ function Notepad({
   onOpen,
   onSave,
 }) {
+  // Current line and column numbers
   const line = text.split("\n").length
   const col = text.split("\n").at(-1).length + 1
 
+  // What appears on the screen
   return (
     <div
       className="notepad-app"
@@ -46,4 +49,5 @@ function Notepad({
   )
 }
 
+// Let other files use this screen
 export default Notepad

@@ -1,6 +1,9 @@
+// Tools from React
 import { useState } from "react"
 
+// Sign in and sign up screen
 function Join({ onAuthenticated, onLogin, onSignup }) {
+  // Things the form needs to remember
   const [mode, setMode] = useState("login")
   const [displayName, setDisplayName] = useState("")
   const [email, setEmail] = useState("")
@@ -8,6 +11,7 @@ function Join({ onAuthenticated, onLogin, onSignup }) {
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
 
+  // What happens when the form is submitted
   async function submitAuth(e) {
     e.preventDefault()
     setMessage("")
@@ -27,6 +31,7 @@ function Join({ onAuthenticated, onLogin, onSignup }) {
     }
   }
 
+  // What appears on the screen
   return (
     <main className="login-screen">
       <div className="login-panel">
@@ -74,6 +79,7 @@ function Join({ onAuthenticated, onLogin, onSignup }) {
   )
 }
 
+// Small display helpers
 function getInitials(name) {
   return (
     name
@@ -85,4 +91,5 @@ function getInitials(name) {
   )
 }
 
+// Let other files use this screen
 export default Join

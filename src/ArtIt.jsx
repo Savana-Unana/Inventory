@@ -1,12 +1,17 @@
+// Tools from React
 import { useEffect, useRef, useState } from "react"
 
+// Website this app opens
 const ART_IT_URL = "https://savana-unana.github.io/ArtIt/"
 
+// Art It app screen
 function ArtIt({ onExport, onPickSaveLocation }) {
+  // Things the drawing app needs to remember
   const frameRef = useRef(null)
   const [ready, setReady] = useState(false)
   const [frameHtml, setFrameHtml] = useState("")
 
+  // Load Art It and listen for save messages
   useEffect(() => {
     let cancelled = false
 
@@ -65,6 +70,7 @@ function ArtIt({ onExport, onPickSaveLocation }) {
     return () => window.removeEventListener("message", receiveFrameMessage)
   }, [onExport, onPickSaveLocation])
 
+  // Tell Art It when Inventory is ready
   function notifyReady() {
     setReady(true)
     frameRef.current?.contentWindow?.postMessage(
@@ -89,6 +95,7 @@ function ArtIt({ onExport, onPickSaveLocation }) {
   )
 }
 
+// Prepare the Art It page so it works inside Inventory
 function prepareArtItHtml(html) {
   const htmlWithAbsoluteAssets = html.replace(
     /\b(src|href)=("|')(\/ArtIt\/[^"']+)/g,
@@ -210,6 +217,7 @@ function prepareArtItHtml(html) {
   return htmlWithBase
 }
 
+// Small helpers for safe text
 function escapeHtml(value) {
   return value.replace(/[&<>"']/g, (char) => {
     const escapes = {
@@ -224,4 +232,5 @@ function escapeHtml(value) {
   })
 }
 
+// Let other files use this screen
 export default ArtIt

@@ -2,24 +2,24 @@
 import { useState } from "react"
 
 // Website this app opens
-const ELEMENT_FIGHT_URL = "https://savana-unana.github.io/ElementFight/"
+const TFILLAH_URL = "https://savana-unana.github.io/Tfillah/"
 
-// Element Fight app screen
-function ElementFight() {
-  // Whether the game has finished loading
+// Tfillah app screen
+function Tfillah() {
+  // Whether Tfillah has finished loading
   const [ready, setReady] = useState(false)
 
   // What appears on the screen
   return (
     <div className="remote-app">
       {!ready && (
-        <div className="remote-loading">Loading Element Fight</div>
+        <div className="remote-loading">Loading Tfillah</div>
       )}
       <iframe
         className="remote-frame"
-        src={ELEMENT_FIGHT_URL}
-        title="Element Fight"
-        allow="autoplay; fullscreen; gamepad"
+        src={TFILLAH_URL}
+        title="Tfillah"
+        allow="autoplay; fullscreen"
         onLoad={() => setReady(true)}
       />
     </div>
@@ -27,4 +27,4 @@ function ElementFight() {
 }
 
 // Let other files use this screen
-export default ElementFight
+export default Tfillah

@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process"
+import { copyFileSync } from "node:fs"
 import path from "node:path"
 
 const viteBin = path.join("node_modules", "vite", "bin", "vite.js")
+
+copyFileSync("index.source.html", "index.html")
 
 const processes = [
   start("api", ["server/index.js"]),

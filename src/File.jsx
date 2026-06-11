@@ -1,24 +1,34 @@
+// Tools from React
 import { useEffect, useState } from "react"
+
+// Pictures used by File Explorer
 import folderIcon from "./assets/logos/Folder.png"
 import fileIcon from "./assets/logos/FileExplorer.png"
 
+// Names used to save files and folders
 const STORAGE_KEY = "inventory-file-explorer-v2"
 const STORE_CHANGE_EVENT = "file-store-change"
 const ROOT_FOLDER_ID = "user"
 const DESKTOP_FOLDER_ID = "desktop"
 const RECYCLE_BIN_FOLDER_ID = "recycle-bin"
 const REMOVED_DEFAULT_FOLDER_IDS = ["documents", "pictures", "videos"]
+
+// File types that can be uploaded
 const ALLOWED_FILE_TYPES = [
   "audio/mpeg",
   "video/mp4",
 ]
 const ALLOWED_FILE_EXTENSIONS = /\.(mp3|mp4|png|jpe?g|gif|webp|bmp|svg|avif|ico|txt)$/i
 const INTERNAL_DRAG_TYPE = "application/x-inventory-file-items"
+
+// Sounds used by File Explorer
 const sfxAssets = import.meta.glob("./sfx/*.{mp3,wav,ogg}", {
   eager: true,
   import: "default",
 })
 const recycledSound = sfxAssets["./sfx/Recycled.mp3"]
+
+// Folders every account starts with
 const BASE_DEFAULT_FOLDERS = [
   { id: ROOT_FOLDER_ID, name: "User Folder", parentId: null },
   { id: DESKTOP_FOLDER_ID, name: "Desktop", parentId: ROOT_FOLDER_ID },
@@ -27,6 +37,7 @@ const BASE_DEFAULT_FOLDERS = [
 ]
 const DEFAULT_FOLDER_IDS = BASE_DEFAULT_FOLDERS.map((folder) => folder.id)
 
+// Make a new File Explorer tab
 function makeFileTab(initialFolder) {
   return {
     id: crypto.randomUUID(),
@@ -37,6 +48,7 @@ function makeFileTab(initialFolder) {
   }
 }
 
+// File Explorer screen
 function File({
   desktopItems = [],
   initialFolder = DESKTOP_FOLDER_ID,
@@ -49,6 +61,7 @@ function File({
   onOpenFile,
   onClose,
 }) {
+  // Things File Explorer needs to remember
   const [store, setStore] = useState(() => loadStore(storageKey, rootFolderName))
   const [tabs, setTabs] = useState(() => [makeFileTab(initialFolder)])
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id)
@@ -62,6 +75,7 @@ function File({
   const [selectedItems, setSelectedItems] = useState([])
   const [dragTargetFolder, setDragTargetFolder] = useState(null)
 
+  // Save changes and reload when another window changes files
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(store))
@@ -79,6 +93,7 @@ function File({
     return () => window.removeEventListener(storeChangeEvent, reloadStore)
   }, [rootFolderName, storageKey, storeChangeEvent])
 
+  // Lists and folder info based on the active tab
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const currentFolder = activeTab.currentFolder
   const backHistory = activeTab.backHistory
@@ -117,6 +132,7 @@ function File({
     ? homeFolderId
     : DESKTOP_FOLDER_ID
 
+  // Small helpers for changing remembered information
   function updateActiveTab(updater) {
     setTabs((current) =>
       current.map((tab) =>
@@ -148,6 +164,7 @@ function File({
     })
   }
 
+  // What happens when files or folders are added
   async function addFiles(fileList, droppedUrls = []) {
     if (isRecycleBin) {
       setMessage("Cant upload to Recycling Bin")
@@ -224,6 +241,7 @@ function File({
     }))
   }
 
+  // What happens when the user moves between folders
   function navigateTo(folderId, remember = true) {
     if (folderId === currentFolder) return
     updateActiveTab((tab) => ({
@@ -263,6 +281,7 @@ function File({
     setContextMenu(null)
   }
 
+  // What happens when tabs are opened or closed
   function openNewTab() {
     const tab = makeFileTab(DESKTOP_FOLDER_ID)
     setTabs((current) => [...current, tab])
@@ -287,6 +306,7 @@ function File({
     }
   }
 
+  // What happens when items are selected or dragged
   function openRename(kind, item) {
     setContextMenu(null)
     setRenaming({ kind, id: item.id })
@@ -408,6 +428,7 @@ function File({
     setDragTargetFolder(folderId)
   }
 
+  // What happens when items are renamed or right-clicked
   function finishRename() {
     const name = renameText.trim()
     if (!renaming || !name) {
@@ -448,6 +469,7 @@ function File({
     })
   }
 
+  // What happens when items are deleted
   function deleteItem(kind, item) {
     if (kind === "folder") {
       updateStore((current) => ({
@@ -539,6 +561,7 @@ function File({
     playSound(recycledSound, volume)
   }
 
+  // Small parts used while drawing the screen
   function renameInput(kind, item) {
     const isRenaming = renaming?.kind === kind && renaming.id === item.id
 
@@ -573,6 +596,7 @@ function File({
     )
   }
 
+  // What appears on the screen
   return (
     <div
       className={`file-app ${dragging ? "file-app-dragging" : ""}`}
@@ -859,6 +883,7 @@ function File({
     </div>
   )
 
+  // What happens when the sort choice changes
   function setSortChoice(by) {
     setSort((current) => ({ ...current, by }))
   }
@@ -868,6 +893,7 @@ function File({
   }
 }
 
+// Show the right picture for each file
 function FileThumb({ file }) {
   if (file.type.startsWith("image/")) {
     return <img className="file-thumb-img" src={file.dataUrl} alt="" />
@@ -884,6 +910,7 @@ function FileThumb({ file }) {
   return <div className="file-thumb-doc">▱</div>
 }
 
+// Small helpers for file names
 function cleanFileName(name) {
   return name.replace(/\.[^/.]+$/, "")
 }
@@ -906,12 +933,14 @@ function getUniqueFileName(name, existingNames) {
   return nextName
 }
 
+// Small helpers for selected items
 function toggleSelected(items, item) {
   return items.includes(item)
     ? items.filter((current) => current !== item)
     : [...items, item]
 }
 
+// Small helpers for knowing what kind of file this is
 function isMediaFile(file) {
   return (
     file.type === "video/mp4" ||
@@ -929,6 +958,7 @@ function isAllowedUpload(file) {
   )
 }
 
+// Small helpers for images dragged in from websites
 function getDroppedUrls(dataTransfer) {
   const uriList = dataTransfer.getData("text/uri-list")
   const plainText = dataTransfer.getData("text/plain")
@@ -985,6 +1015,7 @@ function getImageTypeFromName(name) {
   return "image/png"
 }
 
+// Small helpers for deciding what actions are allowed
 function canRenameItem(kind, item, isRecycleBin) {
   if (isRecycleBin) return false
   if (kind === "app") return false
@@ -999,6 +1030,7 @@ function canDeleteItem(kind, item, isRecycleBin) {
   return kind === "file"
 }
 
+// Small helpers for folders
 function getRecycleFolderTreeIds(folders) {
   const ids = []
   const pending = folders
@@ -1030,6 +1062,7 @@ function isFolderInside(folders, targetFolderId, sourceFolderId) {
   return false
 }
 
+// Small helpers for searching and sorting
 function matchesSearch(name, search) {
   return name.toLowerCase().includes(search.trim().toLowerCase())
 }
@@ -1066,6 +1099,7 @@ function folderPathParts(folders, currentFolder) {
   return parts
 }
 
+// Small helpers for loading saved files and folders
 function loadStore(storageKey = STORAGE_KEY, rootFolderName = "User Folder") {
   const defaultFolders = getDefaultFolders(rootFolderName)
 
@@ -1103,6 +1137,7 @@ function getDefaultFolders(rootFolderName) {
   )
 }
 
+// Small helpers for reading uploaded files
 function readFile(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
@@ -1159,6 +1194,7 @@ function compressImageFile(file) {
   })
 }
 
+// Small helpers for playing sounds
 function playSound(sound, volume = 1) {
   if (!sound) return
 
@@ -1167,4 +1203,5 @@ function playSound(sound, volume = 1) {
   audio.play().catch(() => {})
 }
 
+// Let other files use this screen
 export default File

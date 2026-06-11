@@ -469,12 +469,15 @@
 .app-window-drawing,
 .window-body-drawing,
 .app-window-element-fight,
-.window-body-element-fight {
+.window-body-element-fight,
+.app-window-tfillah,
+.window-body-tfillah {
   background: #202020;
 }
 
 .window-body-drawing,
-.window-body-element-fight {
+.window-body-element-fight,
+.window-body-tfillah {
   overflow: hidden;
 }
 
